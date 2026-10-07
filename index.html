@@ -41,9 +41,9 @@
         const defaultColumns = [
             "產品品號", "客戶品號", "製令編號", "PO下單日", "圖面繪製完成日", 
             "BOM完成日", "多部門會簽完成日", "材料到廠日", "製造開始加工日", 
-            "製造完成加工日", "其他(待料)完成日", "委外完成日", "品保開始檢驗日", 
-            "品保完成檢驗日", "異常返修完工日", "異常返修檢驗完成日", "產品入庫日", 
-            "目標完成日", "備註", "是否有重工"
+            "製造完成加工日", "其他(半品)等待開始日", "其他(半品)完成日", "委外完成日", 
+            "品保開始檢驗日", "品保完成檢驗日", "異常返修完工日", "異常返修檢驗完成日", 
+            "產品入庫日", "目標完成日", "備註", "是否有重工"
         ];
 
         const defaultRows = [
@@ -52,7 +52,7 @@
                 data: { 
                     "產品品號": "PN-A001", "客戶品號": "CUST-001", "製令編號": "MO-2026-001", "PO下單日": "2026-09-25", "圖面繪製完成日": "2026-10-01", 
                     "BOM完成日": "2026-10-02", "多部門會簽完成日": "2026-10-02", "材料到廠日": "2026-10-03", "製造開始加工日": "2026-10-04", 
-                    "製造完成加工日": "2026-10-06", "其他(待料)完成日": "", "委外完成日": "", "品保開始檢驗日": "2026-10-07", "品保完成檢驗日": "2026-10-07", 
+                    "製造完成加工日": "2026-10-06", "其他(半品)等待開始日": "", "其他(半品)完成日": "", "委外完成日": "", "品保開始檢驗日": "2026-10-07", "品保完成檢驗日": "2026-10-07", 
                     "異常返修完工日": "", "異常返修檢驗完成日": "", "產品入庫日": "2026-10-08", "目標完成日": "2026-10-10", "備註": "首件試產順利", "是否有重工": "無" 
                 } 
             },
@@ -61,7 +61,7 @@
                 data: { 
                     "產品品號": "PN-A002", "客戶品號": "CUST-002", "製令編號": "MO-2026-002", "PO下單日": "2026-09-20", "圖面繪製完成日": "2026-09-25", 
                     "BOM完成日": "2026-09-26", "多部門會簽完成日": "2026-09-27", "材料到廠日": "2026-09-28", "製造開始加工日": "2026-09-30", 
-                    "製造完成加工日": "2026-10-05", "其他(待料)完成日": "", "委外完成日": "", "品保開始檢驗日": "2026-10-06", "品保完成檢驗日": "2026-10-07", 
+                    "製造完成加工日": "2026-10-05", "其他(半品)等待開始日": "", "其他(半品)完成日": "", "委外完成日": "", "品保開始檢驗日": "2026-10-06", "品保完成檢驗日": "2026-10-07", 
                     "異常返修完工日": "2026-10-08", "異常返修檢驗完成日": "2026-10-09", "產品入庫日": "2026-10-10", "目標完成日": "2026-10-01", "備註": "尺寸異常重工", "是否有重工": "有" 
                 } 
             }
@@ -72,7 +72,6 @@
         let activeCharts = {};
         let currentChartTab = 1;
         let isInitialLoading = true;
-        let draggedColIdx = null;
         let draggedRowId = null;
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -111,7 +110,6 @@
 
             document.getElementById('add-row-btn').addEventListener('click', addRow);
             document.getElementById('copy-row-btn').addEventListener('click', copyPreviousRow);
-            document.getElementById('add-col-btn').addEventListener('click', addColumnPrompt);
             document.getElementById('export-excel-btn').addEventListener('click', exportToExcel);
             document.getElementById('import-excel-input').addEventListener('change', importFromExcel);
             document.getElementById('analyze-btn').addEventListener('click', openChartModal);
@@ -140,7 +138,13 @@
             onValue(dbRef, (snapshot) => {
                 const val = snapshot.val();
                 if (val) {
-                    if (val.columns) columns = val.columns;
+                    if (val.columns) {
+                        // 確保載入時包含所有最新規範欄位
+                        defaultColumns.forEach(defCol => {
+                            if (!val.columns.includes(defCol)) val.columns.push(defCol);
+                        });
+                        columns = val.columns;
+                    }
                     if (val.rows) tableData = val.rows;
                     if (val.lastUpdated) {
                         document.getElementById('last-update-time').innerText = val.lastUpdated;
@@ -176,15 +180,14 @@
             headerHtml += `<th class="px-4 py-3 bg-gray-100 text-center text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-24 z-20 w-20">操作</th>`;
             
             columns.forEach((col, idx) => {
+                const isRemark = (col === "備註");
+                const colTitleAttr = isRemark ? "點擊修改備註欄位名稱" : "此欄位名稱已鎖定";
                 headerHtml += `
-                    <th class="px-4 py-3 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[160px] cursor-grab active:cursor-grabbing select-none"
-                        draggable="true"
-                        ondragstart="onColumnDragStart(event, ${idx})"
-                        ondragover="event.preventDefault()"
-                        ondrop="onColumnDrop(event, ${idx})">
+                    <th class="px-4 py-3 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[160px] select-none">
                         <div class="flex items-center justify-between">
-                            <span onclick="renameColumn(${idx})" class="cursor-pointer hover:text-blue-600 truncate" title="點擊修改欄位名稱"><i class="fa-solid fa-grip-vertical mr-1 text-gray-400"></i>${col}</span>
-                            <button onclick="deleteColumn(${idx})" class="text-red-400 hover:text-red-600 ml-2" title="刪除欄位"><i class="fa-solid fa-xmark"></i></button>
+                            <span ${isRemark ? `onclick="renameColumn(${idx})" class="cursor-pointer hover:text-blue-600 truncate"` : `class="truncate text-gray-700"`} title="${colTitleAttr}">
+                                ${isRemark ? '<i class="fa-solid fa-pen mr-1 text-blue-500"></i>' : ''}${col}
+                            </span>
                         </div>
                     </th>
                 `;
@@ -244,17 +247,6 @@
             tbody.innerHTML = bodyHtml;
         }
 
-        window.onColumnDragStart = function(e, idx) { draggedColIdx = idx; }
-        window.onColumnDrop = function(e, targetIdx) {
-            e.preventDefault();
-            if (draggedColIdx === null || draggedColIdx === targetIdx) return;
-            const movedCol = columns.splice(draggedColIdx, 1)[0];
-            columns.splice(targetIdx, 0, movedCol);
-            draggedColIdx = null;
-            renderTable();
-            autoSaveToCloud();
-        }
-
         window.onRowDragStart = function(e, rowId) { draggedRowId = rowId; }
         window.onRowDrop = function(e, targetRowId) {
             e.preventDefault();
@@ -308,23 +300,14 @@
             autoSaveToCloud();
         }
 
-        function addColumnPrompt() {
-            const colName = prompt("請輸入新欄位名稱：");
-            if (colName && colName.trim() !== "") {
-                if (columns.includes(colName.trim())) {
-                    alert("欄位名稱已存在！");
-                    return;
-                }
-                columns.push(colName.trim());
-                tableData.forEach(row => { row.data[colName.trim()] = ''; });
-                renderTable();
-                autoSaveToCloud();
-            }
-        }
-
+        // 僅允許修改「備註」欄位名稱
         window.renameColumn = function(idx) {
             const oldName = columns[idx];
-            const newName = prompt(`請輸入新的欄位名稱 (原名稱: ${oldName})：`, oldName);
+            if (oldName !== "備註") {
+                alert("此欄位名稱已鎖定，無法修改！");
+                return;
+            }
+            const newName = prompt(`請輸入新的備註欄位名稱：`, oldName);
             if (newName && newName.trim() !== "" && newName.trim() !== oldName) {
                 if (columns.includes(newName.trim())) {
                     alert("欄位名稱已存在！");
@@ -335,20 +318,6 @@
                     row.data[newName.trim()] = row.data[oldName] || '';
                     delete row.data[oldName];
                 });
-                renderTable();
-                autoSaveToCloud();
-            }
-        }
-
-        window.deleteColumn = function(idx) {
-            if (columns.length <= 1) {
-                alert("至少需保留一個欄位！");
-                return;
-            }
-            const colName = columns[idx];
-            if (confirm(`確定要刪除欄位「${colName}」嗎？`)) {
-                columns.splice(idx, 1);
-                tableData.forEach(row => { delete row.data[colName]; });
                 renderTable();
                 autoSaveToCloud();
             }
@@ -380,7 +349,9 @@
                     const json = XLSX.utils.sheet_to_json(worksheet);
 
                     if (json.length > 0) {
-                        columns = Object.keys(json[0]);
+                        const importedCols = Object.keys(json[0]);
+                        // 保留預設核心欄位，若匯入含有備註修改則對應
+                        columns = [...defaultColumns];
                         tableData = json.map((item, idx) => ({ id: 'import_' + idx + '_' + Date.now(), data: item }));
                         renderTable();
                         autoSaveToCloud();
@@ -838,7 +809,8 @@
             } else if (tabNum === 7) {
                 const remarkMap = {};
                 tableData.forEach(row => {
-                    const remark = (row.data["備註"] || "").trim();
+                    const remarkColName = columns.find(c => c.includes("備註")) || "備註";
+                    const remark = (row.data[remarkColName] || "").trim();
                     if (remark !== "") {
                         const target = row.data["目標完成日"];
                         const actual = row.data["產品入庫日"] || new Date().toISOString().slice(0, 10);
@@ -905,40 +877,38 @@
             }
         }
 
-        // 一鍵匯出所有圖表獨立 PNG (強制改為白底黑字，確保清晰)
+        // 一鍵匯出所有圖表獨立 PNG (白底黑字高清)
         window.exportAllChartsPNG = async function() {
             showToast("正在背景高解析渲染白底黑字獨立圖表...");
             for (let i = 1; i <= 7; i++) {
                 const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = 1600;
-                tempCanvas.height = 1000;
+                tempCanvas.width = 2400;
+                tempCanvas.height = 1500;
                 const tempCtx = tempCanvas.getContext('2d');
 
-                // 繪製白底
                 tempCtx.fillStyle = '#ffffff';
                 tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
-                // 暫時建立白底黑字版本的 Chart
                 const dummyChart = createDummyChartForExport(i, tempCtx);
                 await new Promise(resolve => setTimeout(resolve, 80));
 
                 const imageURL = tempCanvas.toDataURL('image/png');
                 const link = document.createElement('a');
                 link.href = imageURL;
-                link.download = `新品分析圖表_分頁${i}_白底黑字_${new Date().toISOString().slice(0,10)}.png`;
+                link.download = `新品分析圖表_分頁${i}_高畫質白底黑字_${new Date().toISOString().slice(0,10)}.png`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 dummyChart.destroy();
             }
-            showToast("已成功匯出所有白底黑字獨立圖表 PNG！");
+            showToast("已成功匯出所有高清白底黑字獨立圖表 PNG！");
         }
 
-        // 獨立匯出第 7 個異常分析報表 (白底黑字)
+        // 獨立匯出第 7 個異常分析報表 (白底黑字高清)
         window.exportAbnormalChartPNG = async function() {
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 1600;
-            tempCanvas.height = 1000;
+            tempCanvas.width = 2400;
+            tempCanvas.height = 1500;
             const tempCtx = tempCanvas.getContext('2d');
 
             tempCtx.fillStyle = '#ffffff';
@@ -950,21 +920,21 @@
             const imageURL = tempCanvas.toDataURL('image/png');
             const link = document.createElement('a');
             link.href = imageURL;
-            link.download = `異常分析報表_白底黑字_${new Date().toISOString().slice(0,10)}.png`;
+            link.download = `異常分析報表_高畫質白底黑字_${new Date().toISOString().slice(0,10)}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             dummyChart.destroy();
-            showToast("已成功匯出白底黑字異常分析報表 PNG！");
+            showToast("已成功匯出高畫質白底黑字異常分析報表 PNG！");
         }
 
-        // 一鍵匯出 6 合一圖表 (3X2 網格，比例修正為正常標準比例 3600 x 2250)
+        // 一鍵匯出 6 合一圖表 (3X2 網格，採用 4800 x 3000 超高解析度輸出，完美對齊範例比例)
         window.exportCombined6in1PNG = async function() {
-            showToast("正在背景高解析渲染 6 合一全螢幕圖表...");
+            showToast("正在背景高解析渲染 6 合一超高清總結報表...");
             
             const combinedCanvas = document.createElement('canvas');
-            const targetWidth = 3600;
-            const targetHeight = 2250; // 調整比例為完美的 16:10 標準比例，絕不拉長
+            const targetWidth = 4800;
+            const targetHeight = 3000; // 精準 16:10 寬幅標準比例 (對齊範例)
             combinedCanvas.width = targetWidth;
             combinedCanvas.height = targetHeight;
             const ctx = combinedCanvas.getContext('2d');
@@ -973,24 +943,24 @@
             ctx.fillRect(0, 0, targetWidth, targetHeight);
 
             ctx.fillStyle = '#111827';
-            ctx.font = 'bold 52px sans-serif';
+            ctx.font = 'bold 72px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('工廠新品開發綜合圖表分析報表 (6合一全螢幕總結)', targetWidth / 2, 80);
+            ctx.fillText('工廠新品開發綜合圖表分析報表 (6合一全螢幕總結)', targetWidth / 2, 110);
 
             const cols = 3;
             const rows = 2;
-            const marginX = 100;
-            const marginY = 140;
-            const spacingX = 80;
-            const spacingY = 80;
+            const marginX = 140;
+            const marginY = 180;
+            const spacingX = 100;
+            const spacingY = 100;
 
             const panelWidth = (targetWidth - (marginX * 2) - (spacingX * (cols - 1))) / cols;
-            const panelHeight = (targetHeight - marginY - 80 - (spacingY * (rows - 1))) / rows;
+            const panelHeight = (targetHeight - marginY - 120 - (spacingY * (rows - 1))) / rows;
 
             for (let i = 1; i <= 6; i++) {
                 const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = 1600;
-                tempCanvas.height = 1000;
+                tempCanvas.width = 2400;
+                tempCanvas.height = 1500;
                 const tempCtx = tempCanvas.getContext('2d');
 
                 tempCtx.fillStyle = '#ffffff';
@@ -1006,17 +976,17 @@
                         const c = (i - 1) % cols;
                         const r = Math.floor((i - 1) / cols);
                         const x = marginX + c * (panelWidth + spacingX);
-                        const y = marginY + 40 + r * (panelHeight + spacingY);
+                        const y = marginY + 50 + r * (panelHeight + spacingY);
 
                         ctx.strokeStyle = '#e5e7eb';
-                        ctx.lineWidth = 4;
+                        ctx.lineWidth = 6;
                         ctx.fillStyle = '#f9fafb';
                         ctx.beginPath();
-                        ctx.roundRect(x, y, panelWidth, panelHeight, 16);
+                        ctx.roundRect(x, y, panelWidth, panelHeight, 20);
                         ctx.fill();
                         ctx.stroke();
 
-                        ctx.drawImage(img, x + 20, y + 20, panelWidth - 40, panelHeight - 40);
+                        ctx.drawImage(img, x + 30, y + 30, panelWidth - 60, panelHeight - 60);
                         dummyChart.destroy();
                         resolve();
                     };
@@ -1026,14 +996,14 @@
             const combinedURL = combinedCanvas.toDataURL('image/png');
             const link = document.createElement('a');
             link.href = combinedURL;
-            link.download = `工廠新品追蹤_6合一全螢幕分析圖表_${new Date().toISOString().slice(0,10)}.png`;
+            link.download = `工廠新品追蹤_6合一超高清分析報表_${new Date().toISOString().slice(0,10)}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            showToast("已成功匯出 6 合一全螢幕綜合圖表 PNG！");
+            showToast("已成功匯出 6 合一超高清綜合圖表 PNG！");
         }
 
-        // 獨立繪製與白底黑字支援函式
+        // 超高解析度白底黑字獨立繪製支援函式
         function createDummyChartForExport(tabNum, ctx) {
             const lastRow = tableData[tableData.length - 1];
             const lastCustPN = lastRow ? (lastRow.data["客戶品號"] || "最新項目") : "";
@@ -1049,8 +1019,8 @@
                 const cumData = sortedDates.map(date => { cumulative += dateCounts[date]; return cumulative; });
                 return new Chart(ctx, {
                     type: 'line',
-                    data: { labels: sortedDates.length > 0 ? sortedDates : ['無完成資料'], datasets: [{ label: '累積完成首件件數', data: sortedDates.length > 0 ? cumData : [0], borderColor: 'rgba(37, 99, 235, 1)', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.2, borderWidth: 3 }] },
-                    options: { responsive: false, animation: false, plugins: { title: { display: true, text: '新品開發累積完成首件件數趨勢圖', font: { size: 18 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${lastCustPN} (${val})` : '', color: '#1e3a8a', font: { weight: 'bold', size: 13 } }, legend: { labels: { color: '#374151' } } }, scales: { x: { ticks: { color: '#374151' } }, y: { beginAtZero: true, ticks: { stepSize: 1, color: '#374151' } } } },
+                    data: { labels: sortedDates.length > 0 ? sortedDates : ['無完成資料'], datasets: [{ label: '累積完成首件件數', data: sortedDates.length > 0 ? cumData : [0], borderColor: 'rgba(37, 99, 235, 1)', backgroundColor: 'rgba(37, 99, 235, 0.1)', fill: true, tension: 0.2, borderWidth: 4 }] },
+                    options: { responsive: false, animation: false, plugins: { title: { display: true, text: '新品開發累積完成首件件數趨勢圖', font: { size: 26 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${lastCustPN} (${val})` : '', color: '#1e3a8a', font: { weight: 'bold', size: 18 } }, legend: { labels: { color: '#374151', font: { size: 16 } } } }, scales: { x: { ticks: { color: '#374151', font: { size: 14 } } }, y: { beginAtZero: true, ticks: { stepSize: 1, color: '#374151', font: { size: 14 } } } } },
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 2) {
@@ -1066,8 +1036,8 @@
                 });
                 return new Chart(ctx, {
                     type: 'line',
-                    data: { labels: stations.map(s => s.replace('完成日', '').replace('日', '')), datasets: [{ label: '平均累積天數 (自 PO 下單起算)', data: avgDaysPerStation, borderColor: 'rgba(16, 185, 129, 1)', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.2, borderWidth: 3, pointRadius: 6 }] },
-                    options: { responsive: false, animation: false, layout: { padding: { top: 35, right: 40 } }, plugins: { title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (單位: 天)', font: { size: 18 }, color: '#111827' }, datalabels: { align: ctx => ctx.dataIndex === ctx.dataset.data.length - 1 ? 'left' : ctx.dataIndex % 2 === 0 ? 'top' : 'bottom', anchor: ctx => ctx.dataIndex === ctx.dataset.data.length - 1 ? 'start' : 'center', formatter: (val, ctx) => { const idx = ctx.dataIndex; if (idx === 0) return `${val.toFixed(1)}d`; const prev = ctx.dataset.data[idx - 1]; const diff = (val - prev).toFixed(1); return idx === ctx.dataset.data.length - 1 ? `${lastCustPN} | 累:${val.toFixed(1)}d (+${diff}d)` : `累:${val.toFixed(1)}d (區段:+${diff}d)`; }, color: '#065f46', font: { weight: 'bold', size: 12 } }, legend: { labels: { color: '#374151' } } }, scales: { x: { grace: '10%', ticks: { color: '#374151' } }, y: { beginAtZero: true, ticks: { color: '#374151' } } } },
+                    data: { labels: stations.map(s => s.replace('完成日', '').replace('日', '')), datasets: [{ label: '平均累積天數 (自 PO 下單起算)', data: avgDaysPerStation, borderColor: 'rgba(16, 185, 129, 1)', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.2, borderWidth: 4, pointRadius: 8 }] },
+                    options: { responsive: false, animation: false, layout: { padding: { top: 45, right: 50 } }, plugins: { title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (單位: 天)', font: { size: 26 }, color: '#111827' }, datalabels: { align: ctx => ctx.dataIndex === ctx.dataset.data.length - 1 ? 'left' : ctx.dataIndex % 2 === 0 ? 'top' : 'bottom', anchor: ctx => ctx.dataIndex === ctx.dataset.data.length - 1 ? 'start' : 'center', formatter: (val, ctx) => { const idx = ctx.dataIndex; if (idx === 0) return `${val.toFixed(1)}d`; const prev = ctx.dataset.data[idx - 1]; const diff = (val - prev).toFixed(1); return idx === ctx.dataset.data.length - 1 ? `${lastCustPN} | 累:${val.toFixed(1)}d (+${diff}d)` : `累:${val.toFixed(1)}d (區段:+${diff}d)`; }, color: '#065f46', font: { weight: 'bold', size: 16 } }, legend: { labels: { color: '#374151', font: { size: 16 } } } }, scales: { x: { grace: '10%', ticks: { color: '#374151', font: { size: 14 } } }, y: { beginAtZero: true, ticks: { color: '#374151', font: { size: 14 } } } } },
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 3) {
@@ -1087,8 +1057,8 @@
                 const avgData = durationKeys.map(k => avg(durations[k]));
                 return new Chart(ctx, {
                     type: 'line',
-                    data: { labels: durationKeys, datasets: [{ label: '平均耗時 (天)', data: avgData, borderColor: 'rgba(217, 119, 6, 1)', backgroundColor: 'rgba(217, 119, 6, 0.1)', fill: true, tension: 0.2, borderWidth: 3 }] },
-                    options: { responsive: false, animation: false, layout: { padding: { top: 35, right: 30 } }, plugins: { title: { display: true, text: '各站點平均流轉與加工天數瓶頸折線分析 (單位: 天)', font: { size: 18 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${lastCustPN} (${val.toFixed(1)}天)` : `${val.toFixed(1)}d`, color: '#b45309', font: { weight: 'bold', size: 12 } }, legend: { labels: { color: '#374151' } } }, scales: { x: { grace: '10%', ticks: { color: '#374151' } }, y: { beginAtZero: true, ticks: { color: '#374151' } } } },
+                    data: { labels: durationKeys, datasets: [{ label: '平均耗時 (天)', data: avgData, borderColor: 'rgba(217, 119, 6, 1)', backgroundColor: 'rgba(217, 119, 6, 0.1)', fill: true, tension: 0.2, borderWidth: 4 }] },
+                    options: { responsive: false, animation: false, layout: { padding: { top: 45, right: 40 } }, plugins: { title: { display: true, text: '各站點平均流轉與加工天數瓶頸折線分析 (單位: 天)', font: { size: 26 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${lastCustPN} (${val.toFixed(1)}天)` : `${val.toFixed(1)}d`, color: '#b45309', font: { weight: 'bold', size: 16 } }, legend: { labels: { color: '#374151', font: { size: 16 } } } }, scales: { x: { grace: '10%', ticks: { color: '#374151', font: { size: 14 } } }, y: { beginAtZero: true, ticks: { color: '#374151', font: { size: 14 } } } } },
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 4) {
@@ -1099,7 +1069,7 @@
                 return new Chart(ctx, {
                     type: 'doughnut',
                     data: { labels: ['一次通過件數', '重工件數'], datasets: [{ data: [passFirstTime, reworkCount], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 1 }] },
-                    options: { responsive: false, animation: false, plugins: { title: { display: true, text: `新品開發一次通過率: ${passRate}% (總數: ${totalCount} 件)`, font: { size: 18 }, color: '#111827' }, legend: { position: 'bottom', labels: { color: '#374151' } } } }
+                    options: { responsive: false, animation: false, plugins: { title: { display: true, text: `新品開發一次通過率: ${passRate}% (總數: ${totalCount} 件)`, font: { size: 26 }, color: '#111827' }, legend: { position: 'bottom', labels: { color: '#374151', font: { size: 16 } } } } }
                 });
             } else if (tabNum === 5) {
                 const scatterData = []; const productLabels = [];
@@ -1110,8 +1080,8 @@
                 });
                 return new Chart(ctx, {
                     type: 'scatter',
-                    data: { datasets: [{ label: '客戶品號與目標日 GAP (天)', data: scatterData, backgroundColor: scatterData.map(d => d.y <= 0 ? '#10b981' : '#ef4444'), pointRadius: 8 }] },
-                    options: { responsive: false, animation: false, layout: { padding: { top: 35, right: 30 } }, plugins: { title: { display: true, text: '目標日 GAP 散布分析圖 (客戶品號 vs GAP 天數)', font: { size: 18 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${val.custName} (${val.y > 0 ? '+' + val.y : val.y}天)` : `${val.custName}`, color: '#1d4ed8', font: { weight: 'bold', size: 12 } }, legend: { labels: { color: '#374151' } } }, scales: { x: { grace: '10%', ticks: { callback: val => productLabels[val - 1] || '', stepSize: 1, color: '#374151' }, title: { display: true, text: '客戶品號', color: '#374151' } }, y: { title: { display: true, text: 'GAP 天數', color: '#374151' }, ticks: { color: '#374151' } } } },
+                    data: { datasets: [{ label: '客戶品號與目標日 GAP (天)', data: scatterData, backgroundColor: scatterData.map(d => d.y <= 0 ? '#10b981' : '#ef4444'), pointRadius: 10 }] },
+                    options: { responsive: false, animation: false, layout: { padding: { top: 45, right: 40 } }, plugins: { title: { display: true, text: '目標日 GAP 散布分析圖 (客戶品號 vs GAP 天數)', font: { size: 26 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${val.custName} (${val.y > 0 ? '+' + val.y : val.y}天)` : `${val.custName}`, color: '#1d4ed8', font: { weight: 'bold', size: 16 } }, legend: { labels: { color: '#374151', font: { size: 16 } } } }, scales: { x: { grace: '10%', ticks: { callback: val => productLabels[val - 1] || '', stepSize: 1, color: '#374151', font: { size: 14 } }, title: { display: true, text: '客戶品號', color: '#374151', font: { size: 16 } } }, y: { title: { display: true, text: 'GAP 天數', color: '#374151', font: { size: 16 } }, ticks: { color: '#374151', font: { size: 14 } } } } },
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 6) {
@@ -1123,14 +1093,15 @@
                 });
                 return new Chart(ctx, {
                     type: 'scatter',
-                    data: { datasets: [{ label: 'PO 到入庫總天數', data: scatterData, backgroundColor: '#3b82f6', pointRadius: 8 }] },
-                    options: { responsive: false, animation: false, layout: { padding: { top: 35, right: 30 } }, plugins: { title: { display: true, text: `全產品一覽：PO 到入庫總天數散布圖`, font: { size: 18 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${val.custName} (${val.y}天)` : `${val.custName}`, color: '#2563eb', font: { weight: 'bold', size: 12 } }, legend: { labels: { color: '#374151' } } }, scales: { x: { grace: '10%', ticks: { callback: val => productLabels[val - 1] || '', stepSize: 1, color: '#374151' }, title: { display: true, text: '客戶品號', color: '#374151' } }, y: { beginAtZero: true, ticks: { color: '#374151' }, title: { display: true, text: '總天數 (Days)', color: '#374151' } } } },
+                    data: { datasets: [{ label: 'PO 到入庫總天數', data: scatterData, backgroundColor: '#3b82f6', pointRadius: 10 }] },
+                    options: { responsive: false, animation: false, layout: { padding: { top: 45, right: 40 } }, plugins: { title: { display: true, text: `全產品一覽：PO 到入庫總天數散布圖`, font: { size: 26 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${val.custName} (${val.y}天)` : `${val.custName}`, color: '#2563eb', font: { weight: 'bold', size: 16 } }, legend: { labels: { color: '#374151', font: { size: 16 } } } }, scales: { x: { grace: '10%', ticks: { callback: val => productLabels[val - 1] || '', stepSize: 1, color: '#374151', font: { size: 14 } }, title: { display: true, text: '客戶品號', color: '#374151', font: { size: 16 } } }, y: { beginAtZero: true, ticks: { color: '#374151', font: { size: 14 } }, title: { display: true, text: '總天數 (Days)', color: '#374151', font: { size: 16 } } } } },
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 7) {
                 const remarkMap = {};
                 tableData.forEach(row => {
-                    const remark = (row.data["備註"] || "").trim();
+                    const remarkColName = columns.find(c => c.includes("備註")) || "備註";
+                    const remark = (row.data[remarkColName] || "").trim();
                     if (remark !== "") {
                         const target = row.data["目標完成日"], actual = row.data["產品入庫日"] || new Date().toISOString().slice(0, 10);
                         let delayDays = 0.0;
@@ -1144,7 +1115,7 @@
                 return new Chart(ctx, {
                     type: 'bar',
                     data: { labels: remarks.length > 0 ? remarks : ['無備註異常記錄'], datasets: [{ label: '平均異常/延遲天數 (天)', data: remarks.length > 0 ? avgDelays : [0], backgroundColor: 'rgba(239, 68, 68, 0.7)', borderColor: 'rgba(239, 68, 68, 1)', borderWidth: 1 }] },
-                    options: { responsive: false, animation: false, layout: { padding: { top: 35, right: 30 } }, plugins: { title: { display: true, text: '備註事件與對應異常延遲天數分析報表', font: { size: 18 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => remarks.length > 0 ? `${val}天` : '', color: '#b91c1c', font: { weight: 'bold', size: 12 } }, legend: { labels: { color: '#374151' } } }, scales: { x: { grace: '10%', ticks: { color: '#374151' } }, y: { beginAtZero: true, ticks: { color: '#374151' }, title: { display: true, text: '平均延遲天數 (Days)', color: '#374151' } } } },
+                    options: { responsive: false, animation: false, layout: { padding: { top: 45, right: 40 } }, plugins: { title: { display: true, text: '備註事件與對應異常延遲天數分析報表', font: { size: 26 }, color: '#111827' }, datalabels: { align: 'top', anchor: 'end', formatter: (val, ctx) => remarks.length > 0 ? `${val}天` : '', color: '#b91c1c', font: { weight: 'bold', size: 16 } }, legend: { labels: { color: '#374151', font: { size: 16 } } } }, scales: { x: { grace: '10%', ticks: { color: '#374151', font: { size: 14 } } }, y: { beginAtZero: true, ticks: { color: '#374151', font: { size: 14 } }, title: { display: true, text: '平均延遲天數 (Days)', color: '#374151', font: { size: 16 } } } } },
                     plugins: [ChartDataLabels]
                 });
             }
@@ -1220,11 +1191,8 @@
                     <button id="copy-row-btn" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center" title="複製表格中最後一筆資料列">
                         <i class="fa-solid fa-copy mr-1.5"></i> 複製前資料列
                     </button>
-                    <button id="add-col-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
-                        <i class="fa-solid fa-columns mr-1.5"></i> 新增欄位
-                    </button>
                     <span class="text-xs text-emerald-600 font-medium flex items-center ml-2 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">
-                        <i class="fa-solid fa-circle-info mr-1.5 text-base"></i> 支援智慧燈號 (🟢 🟡 🔴) 與拖曳排序
+                        <i class="fa-solid fa-circle-info mr-1.5 text-base"></i> 支援智慧燈號 (🟢 🟡 🔴) 與資料修改
                     </span>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
@@ -1268,8 +1236,8 @@
                 <button id="tab-btn-7" onclick="switchChartTab(7)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">7. 異常分析報表</button>
             </div>
             <div class="flex items-center space-x-3">
-                <button id="export-combined-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap" title="將前 6 個圖表自動合併為 3x2 全螢幕高解析大圖下載">
-                    <i class="fa-solid fa-file-image mr-1.5"></i> 📊 匯出 6 合一全螢幕圖表
+                <button id="export-combined-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap" title="將前 6 個圖表自動合併為超高解析度大圖下載">
+                    <i class="fa-solid fa-file-image mr-1.5"></i> 📊 匯出 6 合一超高清圖表
                 </button>
                 <button id="export-abnormal-btn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap" title="單獨匯出第 7 個白底黑字異常分析報表 PNG">
                     <i class="fa-solid fa-triangle-exclamation mr-1.5"></i> 📥 獨立匯出異常分析
