@@ -288,7 +288,6 @@
             autoSaveToCloud();
         }
 
-        // 新增「複製前資料列」功能
         function copyPreviousRow() {
             if (tableData.length === 0) {
                 addRow();
@@ -296,7 +295,7 @@
             }
             const lastRow = tableData[tableData.length - 1];
             const newId = 'row_' + Date.now();
-            const copiedData = { ...lastRow.data }; // 複製上一筆資料內容
+            const copiedData = { ...lastRow.data };
             tableData.push({ id: newId, data: copiedData });
             renderTable();
             autoSaveToCloud();
@@ -490,6 +489,7 @@
                 });
 
             } else if (tabNum === 2) {
+                // 圖表 2：各站完成日分析 (點跟點之間顯示相減天數，最後一個點顯示客戶品號標籤)
                 const stations = [
                     "PO下單日", "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", 
                     "製造開始加工日", "製造完成加工日", "品保完成檢驗日", "產品入庫日"
@@ -541,12 +541,19 @@
                                 formatter: function(value, context) {
                                     const idx = context.dataIndex;
                                     const currentVal = value;
+                                    const totalLen = context.dataset.data.length;
+
                                     if (idx === 0) {
                                         return `${currentVal.toFixed(1)}d`;
                                     } else {
                                         const prevVal = context.dataset.data[idx - 1];
                                         const diffInterval = parseFloat((currentVal - prevVal).toFixed(1));
-                                        return `累:${currentVal.toFixed(1)}d\n(區段:+${diffInterval}d)`;
+                                        let labelStr = `累:${currentVal.toFixed(1)}d\n(區段:+${diffInterval}d)`;
+                                        // 若為最後一個點，附帶顯示客戶品號
+                                        if (idx === totalLen - 1) {
+                                            labelStr = `${lastCustPN}\n` + labelStr;
+                                        }
+                                        return labelStr;
                                     }
                                 },
                                 backgroundColor: null,
@@ -925,7 +932,6 @@
             const originalTab = currentChartTab;
             const tempCanvases = [];
 
-            // 依序渲染前 6 個核心圖表
             for (let i = 1; i <= 6; i++) {
                 switchChartTab(i);
                 await new Promise(resolve => setTimeout(resolve, 150));
@@ -936,7 +942,6 @@
             }
             switchChartTab(originalTab);
 
-            // 建立高解析全螢幕畫布 (3600 x 2400)
             const combinedCanvas = document.createElement('canvas');
             const targetWidth = 3600;
             const targetHeight = 2400;
@@ -947,13 +952,11 @@
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, targetWidth, targetHeight);
 
-            // 標題
             ctx.fillStyle = '#111827';
             ctx.font = 'bold 52px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('工廠新品開發綜合圖表分析報表 (6合一全螢幕總結)', targetWidth / 2, 80);
 
-            // 3X2 網格排版 (3欄橫排, 2列縱排)
             const cols = 3;
             const rows = 2;
             const marginX = 100;
@@ -975,7 +978,6 @@
                     const x = marginX + c * (panelWidth + spacingX);
                     const y = marginY + 40 + r * (panelHeight + spacingY);
 
-                    // 外框與背景
                     ctx.strokeStyle = '#e5e7eb';
                     ctx.lineWidth = 4;
                     ctx.fillStyle = '#f9fafb';
@@ -984,7 +986,6 @@
                     ctx.fill();
                     ctx.stroke();
 
-                    // 繪製子圖表
                     ctx.drawImage(img, x + 20, y + 20, panelWidth - 40, panelHeight - 40);
 
                     loadedImages++;
