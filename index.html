@@ -86,7 +86,6 @@
         let isInitialLoading = true;
         let draggedRowId = null;
 
-        // 取得繼承前一站點日期的完整站點資料
         function getResolvedDates(rowData) {
             let res = {};
             let lastDate = null;
@@ -510,7 +509,7 @@
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 2) {
-                // 圖表 2: 站點平均天數 (涵蓋全部 15 個站點，字體純黑，正上方對齊)
+                // 圖表 2: 站點平均天數 (交錯對齊與純黑字體，避免重疊)
                 const avgDaysPerStation = allStations.map((st, sIdx) => {
                     if (sIdx === 0) return 0.0;
                     let totalDays = 0;
@@ -548,12 +547,17 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 45, right: 30, left: 20 } },
+                        layout: { padding: { top: 60, bottom: 20, right: 30, left: 20 } },
                         plugins: {
                             title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (單位: 天)', font: { size: 16 } },
                             datalabels: {
-                                align: 'top',
-                                anchor: 'end',
+                                align: function(context) {
+                                    // 奇偶交錯上下顯示，徹底防止文字重疊
+                                    return context.dataIndex % 2 === 0 ? 'top' : 'bottom';
+                                },
+                                anchor: function(context) {
+                                    return context.dataIndex % 2 === 0 ? 'end' : 'start';
+                                },
                                 formatter: function(value, context) {
                                     const idx = context.dataIndex;
                                     const currentVal = value;
@@ -572,19 +576,21 @@
                                     }
                                 },
                                 color: '#000000',
-                                font: { weight: 'bold', size: 11 },
-                                padding: 6
+                                font: { weight: 'bold', size: 10 },
+                                padding: 4
                             }
                         },
                         scales: { 
-                            x: { grace: '10%' },
+                            x: { 
+                                grace: '10%',
+                                ticks: { font: { size: 11 }, maxRotation: 45, minRotation: 45 }
+                            },
                             y: { beginAtZero: true, title: { display: true, text: '累積天數 (Days)' } } 
                         }
                     },
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 3) {
-                // 圖表 3: 流轉與加工瓶頸 (依序計算相鄰站點間隔，不含總前置時間，畫到最後一個站點)
                 const intervalKeys = [];
                 for (let i = 0; i < allStations.length - 1; i++) {
                     intervalKeys.push({
@@ -628,18 +634,22 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 45, right: 30, left: 20 } },
+                        layout: { padding: { top: 50, right: 30, left: 20 } },
                         plugins: {
                             title: { display: true, text: '各相鄰站點平均流轉與加工天數瓶頸分析 (單位: 天)', font: { size: 16 } },
                             datalabels: {
-                                align: 'top',
-                                anchor: 'end',
+                                align: function(context) {
+                                    return context.dataIndex % 2 === 0 ? 'top' : 'bottom';
+                                },
+                                anchor: function(context) {
+                                    return context.dataIndex % 2 === 0 ? 'end' : 'start';
+                                },
                                 formatter: function(value) {
                                     return `${value.toFixed(1)}d`;
                                 },
                                 color: '#000000',
-                                font: { weight: 'bold', size: 11 },
-                                padding: 6
+                                font: { weight: 'bold', size: 10 },
+                                padding: 4
                             }
                         },
                         scales: { 
@@ -959,12 +969,12 @@
                     options: {
                         responsive: false,
                         animation: false,
-                        layout: { padding: { top: 50, right: 40, left: 20 } },
+                        layout: { padding: { top: 70, bottom: 30, right: 40, left: 20 } },
                         plugins: {
                             title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (單位: 天)', font: { size: 26 }, color: '#111827' },
                             datalabels: {
-                                align: 'top',
-                                anchor: 'end',
+                                align: (ctx) => ctx.dataIndex % 2 === 0 ? 'top' : 'bottom',
+                                anchor: (ctx) => ctx.dataIndex % 2 === 0 ? 'end' : 'start',
                                 formatter: (val, ctx) => {
                                     const idx = ctx.dataIndex;
                                     if (idx === 0) return `${val.toFixed(1)}d`;
@@ -973,12 +983,12 @@
                                     return idx === ctx.dataset.data.length - 1 ? `${lastCustPN} | 累:${val.toFixed(1)}d (+${diff}d)` : `累:${val.toFixed(1)}d (+${diff}d)`;
                                 },
                                 color: '#000000',
-                                font: { weight: 'bold', size: 16 }
+                                font: { weight: 'bold', size: 14 }
                             },
                             legend: { labels: { color: '#374151', font: { size: 16 } } }
                         },
                         scales: {
-                            x: { grace: '10%', ticks: { color: '#374151', font: { size: 14 } } },
+                            x: { grace: '10%', ticks: { color: '#374151', font: { size: 12 }, maxRotation: 45, minRotation: 45 } },
                             y: { beginAtZero: true, ticks: { color: '#374151', font: { size: 14 } } }
                         }
                     },
@@ -1021,20 +1031,20 @@
                     options: {
                         responsive: false,
                         animation: false,
-                        layout: { padding: { top: 50, right: 40, left: 20 } },
+                        layout: { padding: { top: 70, bottom: 30, right: 40, left: 20 } },
                         plugins: {
                             title: { display: true, text: '各相鄰站點平均流轉與加工天數瓶頸分析 (單位: 天)', font: { size: 26 }, color: '#111827' },
                             datalabels: {
-                                align: 'top',
-                                anchor: 'end',
+                                align: (ctx) => ctx.dataIndex % 2 === 0 ? 'top' : 'bottom',
+                                anchor: (ctx) => ctx.dataIndex % 2 === 0 ? 'end' : 'start',
                                 formatter: (val) => `${val.toFixed(1)}d`,
                                 color: '#000000',
-                                font: { weight: 'bold', size: 16 }
+                                font: { weight: 'bold', size: 14 }
                             },
                             legend: { labels: { color: '#374151', font: { size: 16 } } }
                         },
                         scales: {
-                            x: { grace: '10%', ticks: { color: '#374151', font: { size: 12 }, maxRotation: 45, minRotation: 45 } },
+                            x: { grace: '10%', ticks: { color: '#374151', font: { size: 11 }, maxRotation: 45, minRotation: 45 } },
                             y: { beginAtZero: true, ticks: { color: '#374151', font: { size: 14 } } }
                         }
                     },
@@ -1210,22 +1220,20 @@
                 const dummyChart = createDummyChartForExport(i, tempCtx);
                 
                 await new Promise((resolve) => {
-                    setTimeout(() => {
-                        const img = new Image();
-                        img.onload = () => {
-                            const cIdx = (i - 1) % cols;
-                            const rIdx = Math.floor((i - 1) / cols);
-                            const drawX = marginX + cIdx * (panelWidth + spacingX);
-                            const drawY = marginY + 60 + rIdx * (panelHeight + spacingY);
+                    const img = new Image();
+                    img.onload = () => {
+                        const cIdx = (i - 1) % cols;
+                        const rIdx = Math.floor((i - 1) / cols);
+                        const drawX = marginX + cIdx * (panelWidth + spacingX);
+                        const drawY = marginY + 60 + rIdx * (panelHeight + spacingY);
 
-                            ctx.strokeStyle = '#e5e7eb';
-                            ctx.lineWidth = 4;
-                            ctx.strokeRect(drawX, drawY, panelWidth, panelHeight);
-                            ctx.drawImage(img, drawX, drawY, panelWidth, panelHeight);
-                            resolve();
-                        };
-                        img.src = tempCanvas.toDataURL('image/png');
-                    }, 50);
+                        ctx.strokeStyle = '#e5e7eb';
+                        ctx.lineWidth = 4;
+                        ctx.strokeRect(drawX, drawY, panelWidth, panelHeight);
+                        ctx.drawImage(img, drawX, drawY, panelWidth, panelHeight);
+                        resolve();
+                    };
+                    img.src = tempCanvas.toDataURL('image/png');
                 });
 
                 dummyChart.destroy();
