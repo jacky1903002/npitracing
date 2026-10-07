@@ -36,14 +36,25 @@
         const auth = getAuth(app);
         const db = getDatabase(app);
 
+        // 依照最新圖片對應的完整欄位
         const defaultColumns = [
-            "產品品號", "客戶品號", "圖面繪製完成日", "材料到廠日", 
-            "開始加工日", "完成加工日", "品保開始檢驗日", "品保完成檢驗日", "產品入庫日"
+            "產品品號", "客戶品號", "製令編號", "PO下單日", "圖面繪製完成日", 
+            "BOM完成日", "多部門會簽完成日", "材料到廠日", "製造開始加工日", 
+            "製造完成加工日", "其他(待料)完成日", "委外完成日", "品保開始檢驗日", 
+            "品保完成檢驗日", "異常返修完工日", "異常返修檢驗完成日", "產品入庫日", 
+            "目標完成日", "備註"
         ];
 
         const defaultRows = [
-            { id: "row_1", data: { "產品品號": "PN-A001", "客戶品號": "CUST-001", "圖面繪製完成日": "2026-10-01", "材料到廠日": "2026-10-03", "開始加工日": "2026-10-04", "完成加工日": "2026-10-06", "品保開始檢驗日": "2026-10-07", "品保完成檢驗日": "2026-10-07", "產品入庫日": "2026-10-08" } },
-            { id: "row_2", data: { "產品品號": "PN-A002", "客戶品號": "CUST-002", "圖面繪製完成日": "2026-10-02", "材料到廠日": "2026-10-05", "開始加工日": "2026-10-06", "完成加工日": "2026-10-10", "品保開始檢驗日": "2026-10-11", "品保完成檢驗日": "2026-10-11", "產品入庫日": "2026-10-12" } }
+            { 
+                id: "row_1", 
+                data: { 
+                    "產品品號": "PN-A001", "客戶品號": "CUST-001", "製令編號": "MO-2026-001", "PO下單日": "2026-09-25", "圖面繪製完成日": "2026-10-01", 
+                    "BOM完成日": "2026-10-02", "多部門會簽完成日": "2026-10-02", "材料到廠日": "2026-10-03", "製造開始加工日": "2026-10-04", 
+                    "製造完成加工日": "2026-10-06", "其他(待料)完成日": "", "委外完成日": "", "品保開始檢驗日": "2026-10-07", "品保完成檢驗日": "2026-10-07", 
+                    "異常返修完工日": "", "異常返修檢驗完成日": "", "產品入庫日": "2026-10-08", "目標完成日": "2026-10-10", "備註": "首件試產順利" 
+                } 
+            }
         ];
 
         let columns = [...defaultColumns];
@@ -147,7 +158,6 @@
             const thead = document.getElementById('table-header');
             const tbody = document.getElementById('table-body');
             
-            // 表頭渲染與欄位拖曳事件
             let headerHtml = `<th class="px-4 py-3 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-0 z-10 w-20 text-center">操作/排序</th>`;
             columns.forEach((col, idx) => {
                 headerHtml += `
@@ -165,9 +175,8 @@
             });
             thead.innerHTML = headerHtml;
 
-            // 資料列渲染與列位拖曳事件
             let bodyHtml = '';
-            tableData.forEach((row, rIdx) => {
+            tableData.forEach((row) => {
                 bodyHtml += `
                     <tr class="hover:bg-gray-50 transition-colors"
                         draggable="true"
@@ -200,10 +209,7 @@
             tbody.innerHTML = bodyHtml;
         }
 
-        // 欄位拖曳處理
-        window.onColumnDragStart = function(e, idx) {
-            draggedColIdx = idx;
-        }
+        window.onColumnDragStart = function(e, idx) { draggedColIdx = idx; }
         window.onColumnDrop = function(e, targetIdx) {
             e.preventDefault();
             if (draggedColIdx === null || draggedColIdx === targetIdx) return;
@@ -214,10 +220,7 @@
             autoSaveToCloud();
         }
 
-        // 列位拖曳處理
-        window.onRowDragStart = function(e, rowId) {
-            draggedRowId = rowId;
-        }
+        window.onRowDragStart = function(e, rowId) { draggedRowId = rowId; }
         window.onRowDrop = function(e, targetRowId) {
             e.preventDefault();
             if (!draggedRowId || draggedRowId === targetRowId) return;
@@ -376,12 +379,12 @@
             }
 
             if (tabNum === 1) {
-                // 圖表 1：累積完成首件件數 (依產品入庫日或完成加工日排序累積)
+                // 圖表 1：累積完成首件件數 (依產品入庫日或製造完成加工日排序累積)
                 const dateCounts = {};
                 tableData.forEach(row => {
-                    const d = row.data['產品入庫日'] || row.data['完成加工日'];
+                    const d = row.data['產品入庫日'] || row.data['製造完成加工日'];
                     if (d) {
-                        const dateKey = d.slice(0, 10); // YYYY-MM-DD
+                        const dateKey = d.slice(0, 10);
                         dateCounts[dateKey] = (dateCounts[dateKey] || 0) + 1;
                     }
                 });
@@ -415,8 +418,8 @@
                 });
 
             } else if (tabNum === 2) {
-                // 圖表 2：各站完成日進度分佈 (統計各月份各站點完成件數)
-                const stations = ["圖面繪製完成日", "材料到廠日", "開始加工日", "完成加工日", "品保完成檢驗日", "產品入庫日"];
+                // 圖表 2：各站完成日進度分佈
+                const stations = ["PO下單日", "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", "製造開始加工日", "製造完成加工日", "其他(待料)完成日", "委外完成日", "品保完成檢驗日", "產品入庫日"];
                 const monthsSet = new Set();
                 tableData.forEach(row => {
                     stations.forEach(st => {
@@ -426,4 +429,224 @@
                 const sortedMonths = Array.from(monthsSet).sort();
                 const datasets = stations.map((st, idx) => {
                     const colors = [
-                        'rgba(59, 130, 246, 0.7)', 'rgba(16, 185, 129
+                        'rgba(59, 130, 246, 0.7)', 'rgba(16, 185, 129, 0.7)', 'rgba(245, 158, 11, 0.7)',
+                        'rgba(239, 68, 68, 0.7)', 'rgba(139, 92, 246, 0.7)', 'rgba(236, 72, 153, 0.7)',
+                        'rgba(14, 165, 233, 0.7)', 'rgba(168, 85, 247, 0.7)', 'rgba(234, 179, 8, 0.7)',
+                        'rgba(20, 184, 166, 0.7)', 'rgba(249, 115, 22, 0.7)'
+                    ];
+                    const data = sortedMonths.map(m => {
+                        return tableData.filter(row => row.data[st] && row.data[st].startsWith(m)).length;
+                    });
+                    return {
+                        label: st.replace('完成日', '').replace('日', ''),
+                        data: data,
+                        backgroundColor: colors[idx % colors.length],
+                        borderWidth: 1
+                    };
+                });
+
+                activeCharts[2] = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: sortedMonths.length > 0 ? sortedMonths : ['無資料'], datasets: datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { title: { display: true, text: '各站點每月完成件數比較分析', font: { size: 16 } } },
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                    }
+                });
+
+            } else if (tabNum === 3) {
+                // 圖表 3：各站時間與瓶頸分析
+                const durations = {
+                    "PO下單至圖面完成": [],
+                    "圖面完成至材料到廠": [],
+                    "材料到廠至開始加工": [],
+                    "製造加工耗時": [],
+                    "品保檢驗耗時": [],
+                    "總前置時間(PO到入庫)": []
+                };
+
+                tableData.forEach(row => {
+                    const d_po = row.data["PO下單日"];
+                    const d_draw = row.data["圖面繪製完成日"];
+                    const d_mat = row.data["材料到廠日"];
+                    const d_start = row.data["製造開始加工日"];
+                    const d_end = row.data["製造完成加工日"];
+                    const d_qc = row.data["品保完成檢驗日"];
+                    const d_in = row.data["產品入庫日"];
+
+                    const diffDays = (dateStr1, dateStr2) => {
+                        if (!dateStr1 || !dateStr2) return null;
+                        const t1 = new Date(dateStr1).getTime();
+                        const t2 = new Date(dateStr2).getTime();
+                        const diff = (t2 - t1) / (1000 * 3600 * 24);
+                        return diff >= 0 ? diff : null;
+                    };
+
+                    if (diffDays(d_po, d_draw) !== null) durations["PO下單至圖面完成"].push(diffDays(d_po, d_draw));
+                    if (diffDays(d_draw, d_mat) !== null) durations["圖面完成至材料到廠"].push(diffDays(d_draw, d_mat));
+                    if (diffDays(d_mat, d_start) !== null) durations["材料到廠至開始加工"].push(diffDays(d_mat, d_start));
+                    if (diffDays(d_start, d_end) !== null) durations["製造加工耗時"].push(diffDays(d_start, d_end));
+                    if (diffDays(d_end, d_qc) !== null) durations["品保檢驗耗時"].push(diffDays(d_end, d_qc));
+                    if (diffDays(d_po, d_in) !== null) durations["總前置時間(PO到入庫)"].push(diffDays(d_po, d_in));
+                });
+
+                const avg = arr => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : 0;
+                const labels = Object.keys(durations);
+                const avgData = labels.map(k => avg(durations[k]));
+
+                activeCharts[3] = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '平均耗時 (天)',
+                            data: avgData,
+                            backgroundColor: 'rgba(217, 119, 6, 0.7)',
+                            borderColor: 'rgba(217, 119, 6, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { title: { display: true, text: '各站點平均流轉與加工天數分析 (瓶頸分析)', font: { size: 16 } } },
+                        scales: { y: { beginAtZero: true, title: { display: true, text: '天數 (Days)' } } }
+                    }
+                });
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => { toast.classList.add('translate-y-20', 'opacity-0'); }, 2500);
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+
+    <!-- 1. 登入介面 -->
+    <div id="login-section" class="flex items-center justify-center min-h-screen px-4">
+        <div class="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
+            <div class="text-center mb-8">
+                <div class="bg-blue-600 text-white w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl shadow-md">
+                    <i class="fa-solid fa-industry"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">工廠新品追蹤系統</h2>
+                <p class="text-sm text-gray-500 mt-1">請使用 Firebase 電子郵件帳號登入</p>
+            </div>
+            <div id="login-error" class="hidden mb-4 p-3 bg-red-100 text-red-700 text-sm rounded-lg"></div>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">電子郵件</label>
+                    <input type="email" id="email" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
+                    <input type="password" id="password" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-medium shadow-md">登入系統</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. 主應用程式介面 -->
+    <div id="app-section" class="hidden flex flex-col min-h-screen">
+        <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 text-white w-10 h-10 rounded-lg flex items-center justify-center shadow">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-800">工廠新品追蹤與進度管理</h1>
+                    <div class="flex items-center space-x-3 mt-0.5">
+                        <div class="flex items-center space-x-1.5 bg-gray-50 px-2 py-0.5 rounded border">
+                            <span id="conn-indicator" class="w-3 h-3 rounded-full bg-gray-400"></span>
+                            <span id="conn-text" class="text-xs font-medium text-gray-500">連線檢查中...</span>
+                        </div>
+                        <span class="text-xs text-gray-500">最後自動儲存: <span id="last-update-time" class="font-medium">同步中...</span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span id="user-email" class="text-sm text-gray-600 font-medium bg-gray-100 px-3 py-1.5 rounded-full"></span>
+                <button id="logout-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3.5 py-1.5 rounded-lg text-sm transition font-medium">
+                    <i class="fa-solid fa-right-from-bracket mr-1"></i> 登出
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6 flex flex-col">
+            <div class="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button id="add-row-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
+                        <i class="fa-solid fa-plus mr-1.5"></i> 新增資料列
+                    </button>
+                    <button id="add-col-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
+                        <i class="fa-solid fa-columns mr-1.5"></i> 新增欄位
+                    </button>
+                    <span class="text-xs text-emerald-600 font-medium flex items-center ml-2 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">
+                        <i class="fa-solid fa-cloud-circle-check mr-1.5 text-base"></i> 拖曳表頭或列首可自由調整順序
+                    </span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button id="analyze-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
+                        <i class="fa-solid fa-chart-pie mr-1.5"></i> 全螢幕圖表分析
+                    </button>
+                    <button id="export-excel-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
+                        <i class="fa-solid fa-file-excel mr-1.5"></i> 匯出 Excel
+                    </button>
+                    <label class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition cursor-pointer flex items-center">
+                        <i class="fa-solid fa-file-arrow-up mr-1.5"></i> 匯入 Excel
+                        <input type="file" id="import-excel-input" accept=".xlsx, .xls" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm flex-1 overflow-hidden border flex flex-col">
+                <div class="overflow-x-auto flex-1 max-h-[65vh]">
+                    <table class="w-full border-collapse text-left text-sm text-gray-600">
+                        <thead>
+                            <tr id="table-header"></tr>
+                        </thead>
+                        <tbody id="table-body" class="divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 全螢幕圖表分析彈跳視窗 (Modal) -->
+    <div id="chart-modal" class="hidden fixed inset-0 bg-white z-50 flex flex-col">
+        <header class="bg-gray-900 text-white px-6 py-4 flex justify-between items-center shadow-md">
+            <div class="flex items-center space-x-4">
+                <h2 class="text-xl font-bold"><i class="fa-solid fa-chart-line text-purple-400 mr-2"></i>工廠新品開發多維度數據分析報表</h2>
+                <!-- 分頁按鈕 -->
+                <div class="flex space-x-2 ml-6">
+                    <button id="tab-btn-1" onclick="switchChartTab(1)" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium shadow">1. 累積完成首件件數</button>
+                    <button id="tab-btn-2" onclick="switchChartTab(2)" class="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-lg text-sm font-medium transition">2. 各站完成日進度分佈</button>
+                    <button id="tab-btn-3" onclick="switchChartTab(3)" class="px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-lg text-sm font-medium transition">3. 各站時間與瓶頸分析</button>
+                </div>
+            </div>
+            <button onclick="closeChartModal()" class="text-gray-300 hover:text-white text-3xl font-bold px-3">&times;</button>
+        </header>
+        <div class="flex-1 p-8 flex items-center justify-center bg-gray-50">
+            <div class="w-full h-full max-w-6xl bg-white p-6 rounded-2xl shadow-xl relative flex items-center justify-center">
+                <!-- 分頁 1 -->
+                <div id="chart-view-1" class="w-full h-full"><canvas id="chartCanvas_1"></canvas></div>
+                <!-- 分頁 2 -->
+                <div id="chart-view-2" class="w-full h-full hidden"><canvas id="chartCanvas_2"></canvas></div>
+                <!-- 分頁 3 -->
+                <div id="chart-view-3" class="w-full h-full hidden"><canvas id="chartCanvas_3"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 浮動提示訊息 Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 text-sm"></div>
+
+</body>
+</html>
