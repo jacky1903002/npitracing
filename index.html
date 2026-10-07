@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Chart.js (圖表分析) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Chart.js DataLabels Plugin (用於氣球提示標籤) -->
+    <!-- Chart.js DataLabels Plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <!-- FontAwesome 圖標 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -459,13 +459,12 @@
                                     }
                                     return '';
                                 },
-                                backgroundColor: '#1e293b',
-                                borderColor: '#3b82f6',
-                                borderWidth: 1,
-                                borderRadius: 6,
-                                color: '#ffffff',
-                                font: { weight: 'bold', size: 11 },
-                                padding: 6
+                                backgroundColor: null, // 無填滿背景
+                                borderColor: null,
+                                borderWidth: 0,
+                                color: '#1e3a8a', // 顯眼深藍色字體
+                                font: { weight: 'bold', size: 12 },
+                                padding: 4
                             }
                         },
                         scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
@@ -474,6 +473,7 @@
                 });
 
             } else if (tabNum === 2) {
+                // 圖表 2：各站完成日分析 (點跟點之間顯示相減天數)
                 const stations = [
                     "PO下單日", "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", 
                     "製造開始加工日", "製造完成加工日", "品保完成檢驗日", "產品入庫日"
@@ -509,30 +509,37 @@
                             fill: true,
                             tension: 0.2,
                             borderWidth: 3,
-                            pointRadius: 5
+                            pointRadius: 6
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            title: { display: true, text: '各站點平均累積天數折線分析圖 (自 PO 下單起算，單位: 天)', font: { size: 16 } },
+                            title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (單位: 天)', font: { size: 16 } },
                             datalabels: {
-                                align: 'top',
-                                anchor: 'end',
-                                formatter: function(value, context) {
-                                    if (context.dataIndex === context.dataset.data.length - 1) {
-                                        return `${lastCustPN} (${value.toFixed(1)}天)`;
-                                    }
-                                    return '';
+                                align: function(context) {
+                                    // 讓點跟點之間的文字交錯上下排列，避免擁擠
+                                    return context.dataIndex % 2 === 0 ? 'top' : 'bottom';
                                 },
-                                backgroundColor: '#1e293b',
-                                borderColor: '#10b981',
-                                borderWidth: 1,
-                                borderRadius: 6,
-                                color: '#ffffff',
+                                anchor: 'center',
+                                formatter: function(value, context) {
+                                    const idx = context.dataIndex;
+                                    const currentVal = value;
+                                    if (idx === 0) {
+                                        return `${currentVal.toFixed(1)}d`;
+                                    } else {
+                                        const prevVal = context.dataset.data[idx - 1];
+                                        const diffInterval = parseFloat((currentVal - prevVal).toFixed(1));
+                                        return `累:${currentVal.toFixed(1)}d\n(區段:+${diffInterval}d)`;
+                                    }
+                                },
+                                backgroundColor: null,
+                                borderColor: null,
+                                borderWidth: 0,
+                                color: '#065f46', // 顯眼深綠色字體
                                 font: { weight: 'bold', size: 11 },
-                                padding: 6
+                                padding: 4
                             }
                         },
                         scales: { y: { beginAtZero: true, title: { display: true, text: '累積天數 (Days)' } } }
@@ -597,15 +604,14 @@
                                     if (context.dataIndex === context.dataset.data.length - 1) {
                                         return `${lastCustPN} (${value.toFixed(1)}天)`;
                                     }
-                                    return '';
+                                    return `${value.toFixed(1)}d`;
                                 },
-                                backgroundColor: '#1e293b',
-                                borderColor: '#d97706',
-                                borderWidth: 1,
-                                borderRadius: 6,
-                                color: '#ffffff',
-                                font: { weight: 'bold', size: 11 },
-                                padding: 6
+                                backgroundColor: null,
+                                borderColor: null,
+                                borderWidth: 0,
+                                color: '#b45309', // 顯眼深橘棕色字體
+                                font: { weight: 'bold', size: 12 },
+                                padding: 4
                             }
                         },
                         scales: { y: { beginAtZero: true, title: { display: true, text: '天數 (Days)' } } }
@@ -685,15 +691,14 @@
                                     if (context.dataIndex === context.dataset.data.length - 1) {
                                         return `${value.custName} (${value.y > 0 ? '+' + value.y : value.y}天)`;
                                     }
-                                    return '';
+                                    return `${value.custName}`;
                                 },
-                                backgroundColor: '#1e293b',
-                                borderColor: '#3b82f6',
-                                borderWidth: 1,
-                                borderRadius: 6,
-                                color: '#ffffff',
-                                font: { weight: 'bold', size: 11 },
-                                padding: 6
+                                backgroundColor: null,
+                                borderColor: null,
+                                borderWidth: 0,
+                                color: '#1d4ed8', // 顯眼亮藍色字體
+                                font: { weight: 'bold', size: 12 },
+                                padding: 4
                             }
                         },
                         scales: {
@@ -765,15 +770,14 @@
                                     if (context.dataIndex === context.dataset.data.length - 1) {
                                         return `${value.custName} (${value.y}天)`;
                                     }
-                                    return '';
+                                    return `${value.custName}`;
                                 },
-                                backgroundColor: '#1e293b',
-                                borderColor: '#3b82f6',
-                                borderWidth: 1,
-                                borderRadius: 6,
-                                color: '#ffffff',
-                                font: { weight: 'bold', size: 11 },
-                                padding: 6
+                                backgroundColor: null,
+                                borderColor: null,
+                                borderWidth: 0,
+                                color: '#2563eb',
+                                font: { weight: 'bold', size: 12 },
+                                padding: 4
                             }
                         },
                         scales: { 
@@ -796,7 +800,6 @@
                 });
 
             } else if (tabNum === 7) {
-                // 圖表 7：異常分析報表 (分析備註事件與對應異常天數)
                 const remarkMap = {};
                 tableData.forEach(row => {
                     const remark = (row.data["備註"] || "").trim();
@@ -841,18 +844,18 @@
                                 align: 'top',
                                 anchor: 'end',
                                 formatter: function(value, context) {
-                                    if (context.dataIndex === context.dataset.data.length - 1 && remarks.length > 0) {
-                                        return `${remarkMap[remarks[context.dataIndex]].custName} (${value}天)`;
+                                    if (remarks.length > 0) {
+                                        const cust = remarkMap[remarks[context.dataIndex]].custName;
+                                        return `${cust} (${value}天)`;
                                     }
                                     return '';
                                 },
-                                backgroundColor: '#1e293b',
-                                borderColor: '#ef4444',
-                                borderWidth: 1,
-                                borderRadius: 6,
-                                color: '#ffffff',
-                                font: { weight: 'bold', size: 11 },
-                                padding: 6
+                                backgroundColor: null,
+                                borderColor: null,
+                                borderWidth: 0,
+                                color: '#b91c1c', // 顯眼深紅色字體
+                                font: { weight: 'bold', size: 12 },
+                                padding: 4
                             }
                         },
                         scales: { y: { beginAtZero: true, title: { display: true, text: '平均延遲天數 (Days)' } } }
