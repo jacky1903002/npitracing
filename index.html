@@ -780,7 +780,7 @@
             }
         }
 
-        // ================= 渲染第二頁的異常事件分析表格（自動計算天數最長的站點） =================
+        // ================= 渲染第二頁異常表格：找出任一相鄰站點間隔天數最長的區段 =================
         function renderAbnormalTable() {
             const tbody = document.getElementById('abnormal-table-body');
             if (!tbody) return;
@@ -788,7 +788,7 @@
             let html = '';
             let hasData = false;
 
-            const milestones = [
+            const stations = [
                 { key: "PO下單日", name: "PO下單" },
                 { key: "圖面繪製完成日", name: "圖面繪製" },
                 { key: "BOM完成日", name: "BOM完成" },
@@ -812,49 +812,34 @@
                     hasData = true;
                     const custPn = row.data["客戶品號"] || "N/A";
                     
-                    let maxDays = 0;
-                    let longestStation = "製造/品保站";
+                    let maxIntervalDays = 0;
+                    let longestIntervalName = "PO下單 - 圖面繪製";
 
-                    const d_po = row.data["PO下單日"];
-                    let lastDate = d_po ? new Date(d_po).getTime() : null;
-                    let lastName = "PO下單";
+                    let prevDate = null;
+                    let prevName = "";
 
-                    milestones.forEach(m => {
-                        if (m.key === "PO下單日") return;
-                        const val = row.data[m.key];
-                        if (val) {
-                            const curDate = new Date(val).getTime();
-                            if (lastDate !== null) {
-                                const diff = Math.round((curDate - lastDate) / (1000 * 3600 * 24));
-                                if (diff > maxDays) {
-                                    maxDays = diff;
-                                    longestStation = `${lastName} → ${m.name}`;
+                    stations.forEach(st => {
+                        const dateStr = row.data[st.key];
+                        if (dateStr) {
+                            const curDate = new Date(dateStr).getTime();
+                            if (prevDate !== null) {
+                                const diff = Math.round((curDate - prevDate) / (1000 * 3600 * 24));
+                                if (diff > maxIntervalDays) {
+                                    maxIntervalDays = diff;
+                                    longestIntervalName = `${prevName} - ${st.name}`;
                                 }
                             }
-                            if (d_po) {
-                                const fromPoDiff = Math.round((curDate - new Date(d_po).getTime()) / (1000 * 3600 * 24));
-                                if (fromPoDiff > maxDays) {
-                                    maxDays = fromPoDiff;
-                                    longestStation = m.name;
-                                }
-                            }
-                            lastDate = curDate;
-                            lastName = m.name;
+                            prevDate = curDate;
+                            prevName = st.name;
                         }
                     });
-
-                    // 若找不到明顯間距，退回預設計算
-                    if (maxDays === 0 && d_po && row.data["產品入庫日"]) {
-                        maxDays = Math.max(0, Math.round((new Date(row.data["產品入庫日"]).getTime() - new Date(d_po).getTime()) / (1000 * 3600 * 24)));
-                        longestStation = "PO下單 → 產品入庫";
-                    }
 
                     html += `
                         <tr class="hover:bg-gray-50">
                             <td class="px-3 py-2 border-b font-medium text-gray-800">${remark}</td>
                             <td class="px-3 py-2 border-b text-gray-600">${custPn}</td>
-                            <td class="px-3 py-2 border-b text-gray-600">${longestStation}</td>
-                            <td class="px-3 py-2 border-b text-red-600 font-bold">${maxDays} 天</td>
+                            <td class="px-3 py-2 border-b text-gray-600">${longestIntervalName}</td>
+                            <td class="px-3 py-2 border-b text-red-600 font-bold">${maxIntervalDays} 天</td>
                         </tr>
                     `;
                 }
@@ -1204,25 +1189,27 @@
                 tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
                 const dummyChart = createDummyChartForExport(i, tempCtx);
-                await new Promise(resolve => setTimeout(resolve, 80));
                 
-                const img = new Image();
-                await new Promise(resolve => {
-                    img.onload = resolve;
-                    img.src = tempCanvas.toDataURL('image/png');
+                // 改用同步繪製與取圖，避免非同步 Promise 阻塞
+                const dataUrl = tempCanvas.toDataURL('image/png');
+                await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const cIdx = (i - 1) % cols;
+                        const rIdx = Math.floor((i - 1) / cols);
+                        const drawX = marginX + cIdx * (panelWidth + spacingX);
+                        const drawY = marginY + 60 + rIdx * (panelHeight + spacingY);
+
+                        ctx.strokeStyle = '#e5e7eb';
+                        ctx.lineWidth = 4;
+                        ctx.strokeRect(drawX, drawY, panelWidth, panelHeight);
+                        ctx.drawImage(img, drawX, drawY, panelWidth, panelHeight);
+                        resolve();
+                    };
+                    img.src = dataUrl;
                 });
 
                 dummyChart.destroy();
-
-                const cIdx = (i - 1) % cols;
-                const rIdx = Math.floor((i - 1) / cols);
-                const drawX = marginX + cIdx * (panelWidth + spacingX);
-                const drawY = marginY + 60 + rIdx * (panelHeight + spacingY);
-
-                ctx.strokeStyle = '#e5e7eb';
-                ctx.lineWidth = 4;
-                ctx.strokeRect(drawX, drawY, panelWidth, panelHeight);
-                ctx.drawImage(img, drawX, drawY, panelWidth, panelHeight);
             }
 
             const link = document.createElement('a');
