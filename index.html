@@ -110,12 +110,14 @@
             logoutBtn.addEventListener('click', () => { signOut(auth); });
 
             document.getElementById('add-row-btn').addEventListener('click', addRow);
+            document.getElementById('copy-row-btn').addEventListener('click', copyPreviousRow);
             document.getElementById('add-col-btn').addEventListener('click', addColumnPrompt);
             document.getElementById('export-excel-btn').addEventListener('click', exportToExcel);
             document.getElementById('import-excel-input').addEventListener('change', importFromExcel);
             document.getElementById('analyze-btn').addEventListener('click', openChartModal);
             document.getElementById('export-charts-btn').addEventListener('click', exportAllChartsPNG);
-            document.getElementById('export-combined-btn').addEventListener('click', exportCombinedAllPNG);
+            document.getElementById('export-combined-btn').addEventListener('click', exportCombined6in1PNG);
+            document.getElementById('export-abnormal-btn').addEventListener('click', exportAbnormalChartPNG);
 
             const connectedRef = ref(db, '.info/connected');
             onValue(connectedRef, (snap) => {
@@ -284,6 +286,21 @@
             tableData.push({ id: newId, data: newRowData });
             renderTable();
             autoSaveToCloud();
+        }
+
+        // 新增「複製前資料列」功能
+        function copyPreviousRow() {
+            if (tableData.length === 0) {
+                addRow();
+                return;
+            }
+            const lastRow = tableData[tableData.length - 1];
+            const newId = 'row_' + Date.now();
+            const copiedData = { ...lastRow.data }; // 複製上一筆資料內容
+            tableData.push({ id: newId, data: copiedData });
+            renderTable();
+            autoSaveToCloud();
+            showToast("已成功複製上一筆資料列！");
         }
 
         window.deleteRow = function(rowId) {
@@ -459,10 +476,10 @@
                                     }
                                     return '';
                                 },
-                                backgroundColor: null, // 無填滿背景
+                                backgroundColor: null,
                                 borderColor: null,
                                 borderWidth: 0,
-                                color: '#1e3a8a', // 顯眼深藍色字體
+                                color: '#1e3a8a',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
                             }
@@ -473,7 +490,6 @@
                 });
 
             } else if (tabNum === 2) {
-                // 圖表 2：各站完成日分析 (點跟點之間顯示相減天數)
                 const stations = [
                     "PO下單日", "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", 
                     "製造開始加工日", "製造完成加工日", "品保完成檢驗日", "產品入庫日"
@@ -519,7 +535,6 @@
                             title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (單位: 天)', font: { size: 16 } },
                             datalabels: {
                                 align: function(context) {
-                                    // 讓點跟點之間的文字交錯上下排列，避免擁擠
                                     return context.dataIndex % 2 === 0 ? 'top' : 'bottom';
                                 },
                                 anchor: 'center',
@@ -537,7 +552,7 @@
                                 backgroundColor: null,
                                 borderColor: null,
                                 borderWidth: 0,
-                                color: '#065f46', // 顯眼深綠色字體
+                                color: '#065f46',
                                 font: { weight: 'bold', size: 11 },
                                 padding: 4
                             }
@@ -609,7 +624,7 @@
                                 backgroundColor: null,
                                 borderColor: null,
                                 borderWidth: 0,
-                                color: '#b45309', // 顯眼深橘棕色字體
+                                color: '#b45309',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
                             }
@@ -696,7 +711,7 @@
                                 backgroundColor: null,
                                 borderColor: null,
                                 borderWidth: 0,
-                                color: '#1d4ed8', // 顯眼亮藍色字體
+                                color: '#1d4ed8',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
                             }
@@ -853,7 +868,7 @@
                                 backgroundColor: null,
                                 borderColor: null,
                                 borderWidth: 0,
-                                color: '#b91c1c', // 顯眼深紅色字體
+                                color: '#b91c1c',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
                             }
@@ -886,12 +901,32 @@
             showToast("已成功匯出所有獨立圖表 PNG！");
         }
 
-        // 一鍵匯出 7 合一總結圖表 (PNG)
-        window.exportCombinedAllPNG = async function() {
+        // 獨立匯出第 7 個異常分析報表
+        window.exportAbnormalChartPNG = function() {
+            const canvas = document.getElementById(`chartCanvas_7`);
+            if (canvas) {
+                if (!activeCharts[7]) {
+                    switchChartTab(7);
+                }
+                const imageURL = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.href = imageURL;
+                link.download = `異常分析報表_${new Date().toISOString().slice(0,10)}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToast("已成功匯出異常分析報表 PNG！");
+            }
+            switchChartTab(currentChartTab);
+        }
+
+        // 一鍵匯出 6 合一圖表 (3X2 橫軸3排, 縱軸2排，最大化全螢幕高解析)
+        window.exportCombined6in1PNG = async function() {
             const originalTab = currentChartTab;
             const tempCanvases = [];
 
-            for (let i = 1; i <= 7; i++) {
+            // 依序渲染前 6 個核心圖表
+            for (let i = 1; i <= 6; i++) {
                 switchChartTab(i);
                 await new Promise(resolve => setTimeout(resolve, 150));
                 const canvas = document.getElementById(`chartCanvas_${i}`);
@@ -901,8 +936,9 @@
             }
             switchChartTab(originalTab);
 
+            // 建立高解析全螢幕畫布 (3600 x 2400)
             const combinedCanvas = document.createElement('canvas');
-            const targetWidth = 2400;
+            const targetWidth = 3600;
             const targetHeight = 2400;
             combinedCanvas.width = targetWidth;
             combinedCanvas.height = targetHeight;
@@ -911,17 +947,19 @@
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, targetWidth, targetHeight);
 
+            // 標題
             ctx.fillStyle = '#111827';
-            ctx.font = 'bold 42px sans-serif';
+            ctx.font = 'bold 52px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('工廠新品開發綜合圖表分析報表 (7合一總結)', targetWidth / 2, 70);
+            ctx.fillText('工廠新品開發綜合圖表分析報表 (6合一全螢幕總結)', targetWidth / 2, 80);
 
-            const cols = 2;
-            const rows = 4;
-            const marginX = 80;
-            const marginY = 120;
-            const spacingX = 60;
-            const spacingY = 60;
+            // 3X2 網格排版 (3欄橫排, 2列縱排)
+            const cols = 3;
+            const rows = 2;
+            const marginX = 100;
+            const marginY = 140;
+            const spacingX = 80;
+            const spacingY = 80;
 
             const panelWidth = (targetWidth - (marginX * 2) - (spacingX * (cols - 1))) / cols;
             const panelHeight = (targetHeight - marginY - 100 - (spacingY * (rows - 1))) / rows;
@@ -937,6 +975,7 @@
                     const x = marginX + c * (panelWidth + spacingX);
                     const y = marginY + 40 + r * (panelHeight + spacingY);
 
+                    // 外框與背景
                     ctx.strokeStyle = '#e5e7eb';
                     ctx.lineWidth = 4;
                     ctx.fillStyle = '#f9fafb';
@@ -945,6 +984,7 @@
                     ctx.fill();
                     ctx.stroke();
 
+                    // 繪製子圖表
                     ctx.drawImage(img, x + 20, y + 20, panelWidth - 40, panelHeight - 40);
 
                     loadedImages++;
@@ -952,11 +992,11 @@
                         const combinedURL = combinedCanvas.toDataURL('image/png');
                         const link = document.createElement('a');
                         link.href = combinedURL;
-                        link.download = `工廠新品追蹤_7合一綜合分析圖表_${new Date().toISOString().slice(0,10)}.png`;
+                        link.download = `工廠新品追蹤_6合一全螢幕分析圖表_${new Date().toISOString().slice(0,10)}.png`;
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
-                        showToast("已成功匯出 7 合一綜合圖表 PNG！");
+                        showToast("已成功匯出 6 合一全螢幕綜合圖表 PNG！");
                     }
                 };
             });
@@ -1029,6 +1069,9 @@
                     <button id="add-row-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
                         <i class="fa-solid fa-plus mr-1.5"></i> 新增資料列
                     </button>
+                    <button id="copy-row-btn" class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center" title="複製表格中最後一筆資料列">
+                        <i class="fa-solid fa-copy mr-1.5"></i> 複製前資料列
+                    </button>
                     <button id="add-col-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
                         <i class="fa-solid fa-columns mr-1.5"></i> 新增欄位
                     </button>
@@ -1077,11 +1120,14 @@
                 <button id="tab-btn-7" onclick="switchChartTab(7)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">7. 異常分析報表</button>
             </div>
             <div class="flex items-center space-x-3">
-                <button id="export-combined-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap" title="將全部 7 個圖表自動合併為一張高畫質總結大圖下載">
-                    <i class="fa-solid fa-file-image mr-1.5"></i> 📊 匯出 7 合一圖表 (PNG)
+                <button id="export-combined-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap" title="將前 6 個圖表自動合併為 3x2 全螢幕高解析大圖下載">
+                    <i class="fa-solid fa-file-image mr-1.5"></i> 📊 匯出 6 合一全螢幕圖表
+                </button>
+                <button id="export-abnormal-btn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap" title="單獨匯出第 7 個異常分析報表 PNG">
+                    <i class="fa-solid fa-triangle-exclamation mr-1.5"></i> 📥 獨立匯出異常分析
                 </button>
                 <button id="export-charts-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap">
-                    <i class="fa-solid fa-download mr-1.5"></i> 匯出獨立圖表
+                    <i class="fa-solid fa-download mr-1.5"></i> 匯出所有獨立圖表
                 </button>
                 <button onclick="closeChartModal()" class="text-gray-300 hover:text-white text-3xl font-bold px-2">&times;</button>
             </div>
