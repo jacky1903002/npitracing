@@ -139,7 +139,6 @@
                 const val = snapshot.val();
                 if (val) {
                     if (val.columns) {
-                        // 確保載入時包含所有最新規範欄位
                         defaultColumns.forEach(defCol => {
                             if (!val.columns.includes(defCol)) val.columns.push(defCol);
                         });
@@ -176,14 +175,26 @@
             const thead = document.getElementById('table-header');
             const tbody = document.getElementById('table-body');
             
-            let headerHtml = `<th class="px-4 py-3 bg-gray-100 text-center text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-0 z-25 w-24">燈號</th>`;
-            headerHtml += `<th class="px-4 py-3 bg-gray-100 text-center text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-24 z-20 w-20">操作</th>`;
+            // 凍結欄位表頭
+            let headerHtml = `<th class="px-4 py-3 bg-gray-100 text-center text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-0 z-30 w-24 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">燈號</th>`;
+            headerHtml += `<th class="px-4 py-3 bg-gray-100 text-center text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-24 z-30 w-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">操作</th>`;
             
             columns.forEach((col, idx) => {
                 const isRemark = (col === "備註");
                 const colTitleAttr = isRemark ? "點擊修改備註欄位名稱" : "此欄位名稱已鎖定";
+                
+                // 設定前三個欄位 (產品品號、客戶品號、製令編號) 為凍結固定
+                let stickyClass = "";
+                if (idx === 0) {
+                    stickyClass = "sticky left-[144px] z-30 bg-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"; // 96px(燈號) + 48px(操作約略或依實際寬度調整) -> 累積定位
+                } else if (idx === 1) {
+                    stickyClass = "sticky left-[304px] z-30 bg-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
+                } else if (idx === 2) {
+                    stickyClass = "sticky left-[464px] z-30 bg-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
+                }
+
                 headerHtml += `
-                    <th class="px-4 py-3 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[160px] select-none">
+                    <th class="px-4 py-3 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[160px] select-none ${stickyClass}">
                         <div class="flex items-center justify-between">
                             <span ${isRemark ? `onclick="renameColumn(${idx})" class="cursor-pointer hover:text-blue-600 truncate"` : `class="truncate text-gray-700"`} title="${colTitleAttr}">
                                 ${isRemark ? '<i class="fa-solid fa-pen mr-1 text-blue-500"></i>' : ''}${col}
@@ -221,21 +232,34 @@
                         ondragover="event.preventDefault()"
                         ondrop="onRowDrop(event, '${row.id}')">
                 `;
-                bodyHtml += `<td class="px-2 py-2 whitespace-nowrap text-center sticky left-0 bg-white z-25 border-b">${lightHtml}</td>`;
+                bodyHtml += `<td class="px-2 py-2 whitespace-nowrap text-center sticky left-0 bg-white z-30 border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">${lightHtml}</td>`;
                 bodyHtml += `
-                    <td class="px-2 py-2 whitespace-nowrap text-center sticky left-24 bg-white z-20 border-b">
+                    <td class="px-2 py-2 whitespace-nowrap text-center sticky left-24 bg-white z-30 border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                         <div class="flex items-center justify-center space-x-1.5">
                             <span class="cursor-grab text-gray-400 hover:text-gray-600 px-1" title="按住拖曳調整列順序"><i class="fa-solid fa-bars"></i></span>
                             <button onclick="deleteRow('${row.id}')" class="text-red-500 hover:text-red-700" title="刪除此列"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     </td>
                 `;
-                columns.forEach(col => {
+                
+                columns.forEach((col, idx) => {
                     const val = row.data[col] || '';
                     const isDate = col.includes('日');
                     const inputType = isDate ? 'date' : 'text';
+
+                    let stickyCellClass = "";
+                    if (idx === 0) {
+                        stickyCellClass = "sticky left-[144px] z-30 bg-white border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
+                    } else if (idx === 1) {
+                        stickyCellClass = "sticky left-[304px] z-30 bg-white border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
+                    } else if (idx === 2) {
+                        stickyCellClass = "sticky left-[464px] z-30 bg-white border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
+                    } else {
+                        stickyCellClass = "border-b";
+                    }
+
                     bodyHtml += `
-                        <td class="px-4 py-2 whitespace-nowrap border-b">
+                        <td class="px-4 py-2 whitespace-nowrap ${stickyCellClass}">
                             <input type="${inputType}" value="${val}" 
                                 class="w-full bg-transparent border-0 focus:ring-1 focus:ring-blue-500 rounded px-1 py-1 text-sm text-gray-700"
                                 onchange="updateCellData('${row.id}', '${col}', this.value)">
@@ -300,7 +324,6 @@
             autoSaveToCloud();
         }
 
-        // 僅允許修改「備註」欄位名稱
         window.renameColumn = function(idx) {
             const oldName = columns[idx];
             if (oldName !== "備註") {
@@ -349,8 +372,6 @@
                     const json = XLSX.utils.sheet_to_json(worksheet);
 
                     if (json.length > 0) {
-                        const importedCols = Object.keys(json[0]);
-                        // 保留預設核心欄位，若匯入含有備註修改則對應
                         columns = [...defaultColumns];
                         tableData = json.map((item, idx) => ({ id: 'import_' + idx + '_' + Date.now(), data: item }));
                         renderTable();
@@ -446,9 +467,6 @@
                                     }
                                     return '';
                                 },
-                                backgroundColor: null,
-                                borderColor: null,
-                                borderWidth: 0,
                                 color: '#1e3a8a',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
@@ -530,9 +548,6 @@
                                         return labelStr;
                                     }
                                 },
-                                backgroundColor: null,
-                                borderColor: null,
-                                borderWidth: 0,
                                 color: '#065f46',
                                 font: { weight: 'bold', size: 11 },
                                 padding: 4
@@ -606,9 +621,6 @@
                                     }
                                     return `${value.toFixed(1)}d`;
                                 },
-                                backgroundColor: null,
-                                borderColor: null,
-                                borderWidth: 0,
                                 color: '#b45309',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
@@ -697,9 +709,6 @@
                                     }
                                     return `${value.custName}`;
                                 },
-                                backgroundColor: null,
-                                borderColor: null,
-                                borderWidth: 0,
                                 color: '#1d4ed8',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
@@ -778,9 +787,6 @@
                                     }
                                     return `${value.custName}`;
                                 },
-                                backgroundColor: null,
-                                borderColor: null,
-                                borderWidth: 0,
                                 color: '#2563eb',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
@@ -859,9 +865,6 @@
                                     }
                                     return '';
                                 },
-                                backgroundColor: null,
-                                borderColor: null,
-                                borderWidth: 0,
                                 color: '#b91c1c',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
@@ -877,7 +880,6 @@
             }
         }
 
-        // 一鍵匯出所有圖表獨立 PNG (白底黑字高清)
         window.exportAllChartsPNG = async function() {
             showToast("正在背景高解析渲染白底黑字獨立圖表...");
             for (let i = 1; i <= 7; i++) {
@@ -904,7 +906,6 @@
             showToast("已成功匯出所有高清白底黑字獨立圖表 PNG！");
         }
 
-        // 獨立匯出第 7 個異常分析報表 (白底黑字高清)
         window.exportAbnormalChartPNG = async function() {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = 2400;
@@ -928,13 +929,12 @@
             showToast("已成功匯出高畫質白底黑字異常分析報表 PNG！");
         }
 
-        // 一鍵匯出 6 合一圖表 (3X2 網格，採用 4800 x 3000 超高解析度輸出，完美對齊範例比例)
         window.exportCombined6in1PNG = async function() {
             showToast("正在背景高解析渲染 6 合一超高清總結報表...");
             
             const combinedCanvas = document.createElement('canvas');
             const targetWidth = 4800;
-            const targetHeight = 3000; // 精準 16:10 寬幅標準比例 (對齊範例)
+            const targetHeight = 3000;
             combinedCanvas.width = targetWidth;
             combinedCanvas.height = targetHeight;
             const ctx = combinedCanvas.getContext('2d');
@@ -1003,7 +1003,6 @@
             showToast("已成功匯出 6 合一超高清綜合圖表 PNG！");
         }
 
-        // 超高解析度白底黑字獨立繪製支援函式
         function createDummyChartForExport(tabNum, ctx) {
             const lastRow = tableData[tableData.length - 1];
             const lastCustPN = lastRow ? (lastRow.data["客戶品號"] || "最新項目") : "";
