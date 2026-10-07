@@ -32,12 +32,10 @@
             measurementId: "G-ZGGL2574BB"
         };
 
-        // 初始化 Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getDatabase(app);
 
-        // 預設範例結構與資料
         const defaultColumns = [
             "產品品號", "客戶品號", "圖面繪製完成日", "材料到廠日", 
             "開始加工日", "完成加工日", "品保開始檢驗日", "品保完成檢驗日", "產品入庫日"
@@ -45,15 +43,17 @@
 
         const defaultRows = [
             { id: "row_1", data: { "產品品號": "PN-A001", "客戶品號": "CUST-001", "圖面繪製完成日": "2026-10-01", "材料到廠日": "2026-10-03", "開始加工日": "2026-10-04", "完成加工日": "2026-10-06", "品保開始檢驗日": "2026-10-07", "品保完成檢驗日": "2026-10-07", "產品入庫日": "2026-10-08" } },
-            { id: "row_2", data: { "產品品號": "PN-A002", "客戶品號": "CUST-002", "圖面繪製完成日": "2026-10-02", "材料到廠日": "2026-10-05", "開始加工日": "2026-10-06", "完成加工日": "", "品保開始檢驗日": "", "品保完成檢驗日": "", "產品入庫日": "" } }
+            { id: "row_2", data: { "產品品號": "PN-A002", "客戶品號": "CUST-002", "圖面繪製完成日": "2026-10-02", "材料到廠日": "2026-10-05", "開始加工日": "2026-10-06", "完成加工日": "2026-10-10", "品保開始檢驗日": "2026-10-11", "品保完成檢驗日": "2026-10-11", "產品入庫日": "2026-10-12" } }
         ];
 
         let columns = [...defaultColumns];
         let tableData = [...defaultRows];
-        let analysisChart = null;
-        let isInitialLoading = true; // 避免初始載入時觸發自動儲存
+        let activeCharts = {};
+        let currentChartTab = 1;
+        let isInitialLoading = true;
+        let draggedColIdx = null;
+        let draggedRowId = null;
 
-        // DOM 元素載入後綁定
         window.addEventListener('DOMContentLoaded', () => {
             const loginSection = document.getElementById('login-section');
             const appSection = document.getElementById('app-section');
@@ -61,7 +61,6 @@
             const logoutBtn = document.getElementById('logout-btn');
             const loginError = document.getElementById('login-error');
 
-            // 監聽登入狀態
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     loginSection.classList.add('hidden');
@@ -74,7 +73,6 @@
                 }
             });
 
-            // 登入事件
             loginForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 const email = document.getElementById('email').value;
@@ -88,19 +86,14 @@
                     });
             });
 
-            // 登出事件
-            logoutBtn.addEventListener('click', () => {
-                signOut(auth);
-            });
+            logoutBtn.addEventListener('click', () => { signOut(auth); });
 
-            // 綁定操作按鈕
             document.getElementById('add-row-btn').addEventListener('click', addRow);
             document.getElementById('add-col-btn').addEventListener('click', addColumnPrompt);
             document.getElementById('export-excel-btn').addEventListener('click', exportToExcel);
             document.getElementById('import-excel-input').addEventListener('change', importFromExcel);
-            document.getElementById('analyze-btn').addEventListener('click', renderChart);
+            document.getElementById('analyze-btn').addEventListener('click', openChartModal);
 
-            // 監控 Firebase Realtime Database 連線狀態 (.info/connected)
             const connectedRef = ref(db, '.info/connected');
             onValue(connectedRef, (snap) => {
                 const indicator = document.getElementById('conn-indicator');
@@ -117,7 +110,6 @@
             });
         });
 
-        // 從雲端載入資料 (即時監聽雲端變動)
         function loadDataFromCloud() {
             const dbRef = ref(db, 'factory_tracking');
             onValue(dbRef, (snapshot) => {
@@ -134,7 +126,6 @@
             });
         }
 
-        // 自動儲存資料到雲端
         window.autoSaveToCloud = function() {
             if (isInitialLoading) return;
             const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
@@ -151,18 +142,22 @@
             });
         }
 
-        // 渲染表格
+        // ================= 渲染表格與拖曳邏輯 =================
         window.renderTable = function() {
             const thead = document.getElementById('table-header');
             const tbody = document.getElementById('table-body');
             
-            // 組合表頭
-            let headerHtml = `<th class="px-4 py-3 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-0 z-10 w-16">操作</th>`;
+            // 表頭渲染與欄位拖曳事件
+            let headerHtml = `<th class="px-4 py-3 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-0 z-10 w-20 text-center">操作/排序</th>`;
             columns.forEach((col, idx) => {
                 headerHtml += `
-                    <th class="px-4 py-3 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[160px]">
+                    <th class="px-4 py-3 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[160px] cursor-grab active:cursor-grabbing select-none"
+                        draggable="true"
+                        ondragstart="onColumnDragStart(event, ${idx})"
+                        ondragover="event.preventDefault()"
+                        ondrop="onColumnDrop(event, ${idx})">
                         <div class="flex items-center justify-between">
-                            <span onclick="renameColumn(${idx})" class="cursor-pointer hover:text-blue-600 truncate" title="點擊修改欄位名稱">${col}</span>
+                            <span onclick="renameColumn(${idx})" class="cursor-pointer hover:text-blue-600 truncate" title="點擊修改欄位名稱"><i class="fa-solid fa-grip-vertical mr-1 text-gray-400"></i>${col}</span>
                             <button onclick="deleteColumn(${idx})" class="text-red-400 hover:text-red-600 ml-2" title="刪除欄位"><i class="fa-solid fa-xmark"></i></button>
                         </div>
                     </th>
@@ -170,13 +165,22 @@
             });
             thead.innerHTML = headerHtml;
 
-            // 組合資料列
+            // 資料列渲染與列位拖曳事件
             let bodyHtml = '';
-            tableData.forEach((row) => {
-                bodyHtml += `<tr class="hover:bg-gray-50 transition-colors">`;
+            tableData.forEach((row, rIdx) => {
                 bodyHtml += `
-                    <td class="px-4 py-2 whitespace-nowrap text-center sticky left-0 bg-white z-10 border-b">
-                        <button onclick="deleteRow('${row.id}')" class="text-red-500 hover:text-red-700" title="刪除此列"><i class="fa-solid fa-trash"></i></button>
+                    <tr class="hover:bg-gray-50 transition-colors"
+                        draggable="true"
+                        ondragstart="onRowDragStart(event, '${row.id}')"
+                        ondragover="event.preventDefault()"
+                        ondrop="onRowDrop(event, '${row.id}')">
+                `;
+                bodyHtml += `
+                    <td class="px-2 py-2 whitespace-nowrap text-center sticky left-0 bg-white z-10 border-b">
+                        <div class="flex items-center justify-center space-x-1.5">
+                            <span class="cursor-grab text-gray-400 hover:text-gray-600 px-1" title="按住拖曳調整列順序"><i class="fa-solid fa-bars"></i></span>
+                            <button onclick="deleteRow('${row.id}')" class="text-red-500 hover:text-red-700" title="刪除此列"><i class="fa-solid fa-trash"></i></button>
+                        </div>
                     </td>
                 `;
                 columns.forEach(col => {
@@ -196,7 +200,38 @@
             tbody.innerHTML = bodyHtml;
         }
 
-        // 更新儲存格資料並觸發自動儲存
+        // 欄位拖曳處理
+        window.onColumnDragStart = function(e, idx) {
+            draggedColIdx = idx;
+        }
+        window.onColumnDrop = function(e, targetIdx) {
+            e.preventDefault();
+            if (draggedColIdx === null || draggedColIdx === targetIdx) return;
+            const movedCol = columns.splice(draggedColIdx, 1)[0];
+            columns.splice(targetIdx, 0, movedCol);
+            draggedColIdx = null;
+            renderTable();
+            autoSaveToCloud();
+        }
+
+        // 列位拖曳處理
+        window.onRowDragStart = function(e, rowId) {
+            draggedRowId = rowId;
+        }
+        window.onRowDrop = function(e, targetRowId) {
+            e.preventDefault();
+            if (!draggedRowId || draggedRowId === targetRowId) return;
+            const fromIdx = tableData.findIndex(r => r.id === draggedRowId);
+            const toIdx = tableData.findIndex(r => r.id === targetRowId);
+            if (fromIdx !== -1 && toIdx !== -1) {
+                const movedRow = tableData.splice(fromIdx, 1)[0];
+                tableData.splice(toIdx, 0, movedRow);
+                draggedRowId = null;
+                renderTable();
+                autoSaveToCloud();
+            }
+        }
+
         window.updateCellData = function(rowId, colName, value) {
             const row = tableData.find(r => r.id === rowId);
             if (row) {
@@ -205,7 +240,6 @@
             }
         }
 
-        // 新增一列
         function addRow() {
             const newId = 'row_' + Date.now();
             const newRowData = {};
@@ -215,14 +249,12 @@
             autoSaveToCloud();
         }
 
-        // 刪除一列
         window.deleteRow = function(rowId) {
             tableData = tableData.filter(r => r.id !== rowId);
             renderTable();
             autoSaveToCloud();
         }
 
-        // 新增欄位
         function addColumnPrompt() {
             const colName = prompt("請輸入新欄位名稱：");
             if (colName && colName.trim() !== "") {
@@ -231,15 +263,12 @@
                     return;
                 }
                 columns.push(colName.trim());
-                tableData.forEach(row => {
-                    row.data[colName.trim()] = '';
-                });
+                tableData.forEach(row => { row.data[colName.trim()] = ''; });
                 renderTable();
                 autoSaveToCloud();
             }
         }
 
-        // 重新命名欄位
         window.renameColumn = function(idx) {
             const oldName = columns[idx];
             const newName = prompt(`請輸入新的欄位名稱 (原名稱: ${oldName})：`, oldName);
@@ -258,30 +287,25 @@
             }
         }
 
-        // 刪除欄位
         window.deleteColumn = function(idx) {
             if (columns.length <= 1) {
                 alert("至少需保留一個欄位！");
                 return;
             }
             const colName = columns[idx];
-            if (confirm(`確定要刪除欄位「${colName}」嗎？對應的資料將會被移除。`)) {
+            if (confirm(`確定要刪除欄位「${colName}」嗎？`)) {
                 columns.splice(idx, 1);
-                tableData.forEach(row => {
-                    delete row.data[colName];
-                });
+                tableData.forEach(row => { delete row.data[colName]; });
                 renderTable();
                 autoSaveToCloud();
             }
         }
 
-        // Excel 匯出
+        // ================= Excel 匯入匯出 =================
         function exportToExcel() {
             const exportData = tableData.map(row => {
                 let obj = {};
-                columns.forEach(col => {
-                    obj[col] = row.data[col] || '';
-                });
+                columns.forEach(col => { obj[col] = row.data[col] || ''; });
                 return obj;
             });
             const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -290,7 +314,6 @@
             XLSX.writeFile(workbook, "工廠新品追蹤表_" + new Date().toISOString().slice(0,10) + ".xlsx");
         }
 
-        // Excel 匯入
         function importFromExcel(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -304,203 +327,103 @@
                     const json = XLSX.utils.sheet_to_json(worksheet);
 
                     if (json.length > 0) {
-                        const importedCols = Object.keys(json[0]);
-                        columns = importedCols;
-                        tableData = json.map((item, idx) => ({
-                            id: 'import_' + idx + '_' + Date.now(),
-                            data: item
-                        }));
+                        columns = Object.keys(json[0]);
+                        tableData = json.map((item, idx) => ({ id: 'import_' + idx + '_' + Date.now(), data: item }));
                         renderTable();
                         autoSaveToCloud();
                         showToast("Excel 匯入成功並已自動存入雲端！");
                     }
                 } catch (err) {
-                    alert("匯入失敗，檔案格式可能有誤: " + err.message);
+                    alert("匯入失敗: " + err.message);
                 }
                 e.target.value = '';
             };
             reader.readAsArrayBuffer(file);
         }
 
-        // 一鍵生成分析圖表
-        function renderChart() {
+        // ================= 全螢幕多頁圖表分析系統 =================
+        window.openChartModal = function() {
             const modal = document.getElementById('chart-modal');
             modal.classList.remove('hidden');
-
-            const monthCounts = {};
-            tableData.forEach(row => {
-                const dateVal = row.data['開始加工日'] || row.data['圖面繪製完成日'];
-                if (dateVal) {
-                    const month = dateVal.slice(0, 7);
-                    monthCounts[month] = (monthCounts[month] || 0) + 1;
-                } else {
-                    monthCounts['未排程/未定'] = (monthCounts['未排程/未定'] || 0) + 1;
-                }
-            });
-
-            const labels = Object.keys(monthCounts).sort();
-            const data = labels.map(l => monthCounts[l]);
-
-            const ctx = document.getElementById('analysisChart').getContext('2d');
-            if (analysisChart) {
-                analysisChart.destroy();
-            }
-
-            analysisChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: '新品開發數量分佈',
-                        data: data,
-                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                        borderColor: 'rgba(59, 130, 246, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { position: 'top' },
-                        title: { display: true, text: '新品開發進度時間分佈統計圖' }
-                    },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
-                    }
-                }
-            });
+            switchChartTab(1);
         }
 
         window.closeChartModal = function() {
             document.getElementById('chart-modal').classList.add('hidden');
         }
 
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            toast.innerText = msg;
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => {
-                toast.classList.add('translate-y-20', 'opacity-0');
-            }, 2500);
+        window.switchChartTab = function(tabNum) {
+            currentChartTab = tabNum;
+            for (let i = 1; i <= 3; i++) {
+                const btn = document.getElementById(`tab-btn-${i}`);
+                const view = document.getElementById(`chart-view-${i}`);
+                if (i === tabNum) {
+                    btn.className = "px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium shadow";
+                    view.classList.remove('hidden');
+                } else {
+                    btn.className = "px-4 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-lg text-sm font-medium transition";
+                    view.classList.add('hidden');
+                }
+            }
+            renderSpecificChart(tabNum);
         }
-    </script>
-</head>
-<body class="bg-gray-100 min-h-screen font-sans">
 
-    <!-- 1. 登入介面 (Firebase Auth) -->
-    <div id="login-section" class="flex items-center justify-center min-h-screen px-4">
-        <div class="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
-            <div class="text-center mb-8">
-                <div class="bg-blue-600 text-white w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl shadow-md">
-                    <i class="fa-solid fa-industry"></i>
-                </div>
-                <h2 class="text-2xl font-bold text-gray-800">工廠新品追蹤系統</h2>
-                <p class="text-sm text-gray-500 mt-1">請使用 Firebase 電子郵件帳號登入</p>
-            </div>
-            <div id="login-error" class="hidden mb-4 p-3 bg-red-100 text-red-700 text-sm rounded-lg"></div>
-            <form id="login-form" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">電子郵件</label>
-                    <input type="email" id="email" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">密碼</label>
-                    <input type="password" id="password" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                </div>
-                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-medium shadow-md">
-                    登入系統
-                </button>
-            </form>
-        </div>
-    </div>
+        function renderSpecificChart(tabNum) {
+            const canvasId = `chartCanvas_${tabNum}`;
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            if (activeCharts[tabNum]) {
+                activeCharts[tabNum].destroy();
+            }
 
-    <!-- 2. 主應用程式介面 (登入後顯示) -->
-    <div id="app-section" class="hidden flex flex-col min-h-screen">
-        <!-- 頂部導覽列 -->
-        <header class="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <div class="bg-blue-600 text-white w-10 h-10 rounded-lg flex items-center justify-center shadow">
-                    <i class="fa-solid fa-boxes-stacked"></i>
-                </div>
-                <div>
-                    <h1 class="text-xl font-bold text-gray-800">工廠新品追蹤與進度管理</h1>
-                    <div class="flex items-center space-x-3 mt-0.5">
-                        <!-- 連線狀態指示器 -->
-                        <div class="flex items-center space-x-1.5 bg-gray-50 px-2 py-0.5 rounded border">
-                            <span id="conn-indicator" class="w-3 h-3 rounded-full bg-gray-400"></span>
-                            <span id="conn-text" class="text-xs font-medium text-gray-500">連線檢查中...</span>
-                        </div>
-                        <!-- 最後自動儲存時間 -->
-                        <span class="text-xs text-gray-500">最後自動儲存: <span id="last-update-time" class="font-medium">同步中...</span></span>
-                    </div>
-                </div>
-            </div>
-            <div class="flex items-center space-x-4">
-                <span id="user-email" class="text-sm text-gray-600 font-medium bg-gray-100 px-3 py-1.5 rounded-full"></span>
-                <button id="logout-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3.5 py-1.5 rounded-lg text-sm transition font-medium">
-                    <i class="fa-solid fa-right-from-bracket mr-1"></i> 登出
-                </button>
-            </div>
-        </header>
+            if (tabNum === 1) {
+                // 圖表 1：累積完成首件件數 (依產品入庫日或完成加工日排序累積)
+                const dateCounts = {};
+                tableData.forEach(row => {
+                    const d = row.data['產品入庫日'] || row.data['完成加工日'];
+                    if (d) {
+                        const dateKey = d.slice(0, 10); // YYYY-MM-DD
+                        dateCounts[dateKey] = (dateCounts[dateKey] || 0) + 1;
+                    }
+                });
+                const sortedDates = Object.keys(dateCounts).sort();
+                let cumulative = 0;
+                const cumData = sortedDates.map(date => {
+                    cumulative += dateCounts[date];
+                    return cumulative;
+                });
 
-        <!-- 主要功能操作區 -->
-        <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6 flex flex-col">
-            <!-- 工具列按鈕群組 (已移除手動儲存按鈕，全面改為自動同步) -->
-            <div class="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-wrap items-center justify-between gap-4">
-                <div class="flex flex-wrap items-center gap-2">
-                    <button id="add-row-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
-                        <i class="fa-solid fa-plus mr-1.5"></i> 新增資料列
-                    </button>
-                    <button id="add-col-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
-                        <i class="fa-solid fa-columns mr-1.5"></i> 新增欄位
-                    </button>
-                    <span class="text-xs text-emerald-600 font-medium flex items-center ml-2 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">
-                        <i class="fa-solid fa-cloud-circle-check mr-1.5 text-base"></i> 變更時會自動儲存至雲端
-                    </span>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    <button id="analyze-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
-                        <i class="fa-solid fa-chart-pie mr-1.5"></i> 一鍵生成圖表
-                    </button>
-                    <button id="export-excel-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
-                        <i class="fa-solid fa-file-excel mr-1.5"></i> 匯出 Excel
-                    </button>
-                    <label class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition cursor-pointer flex items-center">
-                        <i class="fa-solid fa-file-arrow-up mr-1.5"></i> 匯入 Excel
-                        <input type="file" id="import-excel-input" accept=".xlsx, .xls" class="hidden">
-                    </label>
-                </div>
-            </div>
+                activeCharts[1] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: sortedDates.length > 0 ? sortedDates : ['無完成資料'],
+                        datasets: [{
+                            label: '累積完成首件件數',
+                            data: sortedDates.length > 0 ? cumData : [0],
+                            borderColor: 'rgba(37, 99, 235, 1)',
+                            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            borderWidth: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { title: { display: true, text: '新品開發累積完成首件件數趨勢圖', font: { size: 16 } } },
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                    }
+                });
 
-            <!-- 表格容器 -->
-            <div class="bg-white rounded-xl shadow-sm flex-1 overflow-hidden border flex flex-col">
-                <div class="overflow-x-auto flex-1 max-h-[65vh]">
-                    <table class="w-full border-collapse text-left text-sm text-gray-600">
-                        <thead>
-                            <tr id="table-header"></tr>
-                        </thead>
-                        <tbody id="table-body" class="divide-y divide-gray-200"></tbody>
-                    </table>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <!-- 圖表分析彈跳視窗 (Modal) -->
-    <div id="chart-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-xl max-w-2xl w-full p-6 shadow-2xl relative">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-gray-800"><i class="fa-solid fa-chart-column text-blue-600 mr-2"></i>新品進度分析圖表</h3>
-                <button onclick="closeChartModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
-            </div>
-            <div class="relative h-80">
-                <canvas id="analysisChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <!-- 浮動提示訊息 Toast -->
-    <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 text-sm"></div>
-
-</body>
-</html>
+            } else if (tabNum === 2) {
+                // 圖表 2：各站完成日進度分佈 (統計各月份各站點完成件數)
+                const stations = ["圖面繪製完成日", "材料到廠日", "開始加工日", "完成加工日", "品保完成檢驗日", "產品入庫日"];
+                const monthsSet = new Set();
+                tableData.forEach(row => {
+                    stations.forEach(st => {
+                        if (row.data[st]) monthsSet.add(row.data[st].slice(0, 7));
+                    });
+                });
+                const sortedMonths = Array.from(monthsSet).sort();
+                const datasets = stations.map((st, idx) => {
+                    const colors = [
+                        'rgba(59, 130, 246, 0.7)', 'rgba(16, 185, 129
