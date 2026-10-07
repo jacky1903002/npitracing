@@ -113,6 +113,7 @@
             document.getElementById('import-excel-input').addEventListener('change', importFromExcel);
             document.getElementById('analyze-btn').addEventListener('click', openChartModal);
             document.getElementById('export-charts-btn').addEventListener('click', exportAllChartsPNG);
+            document.getElementById('export-combined-btn').addEventListener('click', exportCombined6in1PNG);
 
             const connectedRef = ref(db, '.info/connected');
             onValue(connectedRef, (snap) => {
@@ -375,7 +376,7 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // ================= 總和圖表分析系統 =================
+        // ================= 綜合圖表分析系統 =================
         window.openChartModal = function() {
             const modal = document.getElementById('chart-modal');
             modal.classList.remove('hidden');
@@ -448,7 +449,6 @@
                 });
 
             } else if (tabNum === 2) {
-                // 圖表 2：各站完成日分析 (X軸: 各站別, Y軸: 從PO下單起算的累積天數平均)
                 const stations = [
                     "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", 
                     "製造開始加工日", "製造完成加工日", "品保完成檢驗日", "產品入庫日"
@@ -472,21 +472,24 @@
                 });
 
                 activeCharts[2] = new Chart(ctx, {
-                    type: 'bar',
+                    type: 'line',
                     data: {
                         labels: stations.map(s => s.replace('完成日', '').replace('日', '')),
                         datasets: [{
-                            label: '從 PO 下單起算之平均累積天數 (Days)',
+                            label: '平均累積天數 (自 PO 下單起算)',
                             data: avgDaysPerStation,
-                            backgroundColor: 'rgba(16, 185, 129, 0.7)',
                             borderColor: 'rgba(16, 185, 129, 1)',
-                            borderWidth: 1
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            borderWidth: 3,
+                            pointRadius: 5
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { title: { display: true, text: '各站點平均累積耗時分析 (自 PO 下單起算)', font: { size: 16 } } },
+                        plugins: { title: { display: true, text: '各站點平均累積天數折線分析圖 (自 PO 下單起算)', font: { size: 16 } } },
                         scales: { y: { beginAtZero: true, title: { display: true, text: '累積天數 (Days)' } } }
                     }
                 });
@@ -558,7 +561,6 @@
                 });
 
             } else if (tabNum === 5) {
-                // 圖表 5：目標日 GAP 分析圖 (產品品號 VS GAP天數 散布圖 Scatter)
                 const scatterData = [];
                 const productLabels = [];
 
@@ -602,7 +604,7 @@
                             x: {
                                 title: { display: true, text: '產品品號' },
                                 ticks: {
-                                    callback: function(val, index) {
+                                    callback: function(val) {
                                         return productLabels[val - 1] || '';
                                     },
                                     stepSize: 1
@@ -616,18 +618,18 @@
                 });
 
             } else if (tabNum === 6) {
-                const labels = [];
-                const daysData = [];
+                const scatterData = [];
+                const productLabels = [];
 
-                tableData.forEach(row => {
-                    const pn = row.data["產品品號"] || '未命名';
+                tableData.forEach((row, idx) => {
+                    const pn = row.data["產品品號"] || `項次 ${idx+1}`;
+                    productLabels.push(pn);
                     const po = row.data["PO下單日"];
                     const inDate = row.data["產品入庫日"];
                     if (po && inDate) {
                         const days = (new Date(inDate).getTime() - new Date(po).getTime()) / (1000 * 3600 * 24);
                         if (days >= 0) {
-                            labels.push(pn);
-                            daysData.push(days);
+                            scatterData.push({ x: idx + 1, y: days, productName: pn });
                         }
                     }
                 });
@@ -636,35 +638,55 @@
                 const monthInCount = tableData.filter(row => row.data["產品入庫日"] && row.data["產品入庫日"].startsWith(currentMonthStr)).length;
 
                 activeCharts[6] = new Chart(ctx, {
-                    type: 'bar',
+                    type: 'scatter',
                     data: {
-                        labels: labels.length ? labels : ['尚無完整 PO 到入庫資料'],
                         datasets: [{
-                            label: '從 PO 下單到產品入庫總天數 (Days)',
-                            data: daysData.length ? daysData : [0],
-                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                            borderColor: 'rgba(59, 130, 246, 1)',
-                            borderWidth: 1
+                            label: 'PO 到入庫總天數',
+                            data: scatterData,
+                            backgroundColor: '#3b82f6',
+                            pointRadius: 8,
+                            pointHoverRadius: 10
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: { 
-                            title: { display: true, text: `全產品一覽：PO 到入庫總天數 (本月累計入庫總數: ${monthInCount} 件)`, font: { size: 16 } } 
+                            title: { display: true, text: `全產品一覽：PO 到入庫總天數散布圖 (本月累計入庫總數: ${monthInCount} 件)`, font: { size: 16 } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const point = context.raw;
+                                        return `${point.productName}: 總天數 ${point.y} 天`;
+                                    }
+                                }
+                            }
                         },
-                        scales: { y: { beginAtZero: true, title: { display: true, text: '總天數 (Days)' } } }
+                        scales: { 
+                            x: {
+                                title: { display: true, text: '產品品號' },
+                                ticks: {
+                                    callback: function(val) {
+                                        return productLabels[val - 1] || '';
+                                    },
+                                    stepSize: 1
+                                }
+                            },
+                            y: { 
+                                beginAtZero: true, 
+                                title: { display: true, text: '總天數 (Days)' } 
+                            } 
+                        }
                     }
                 });
             }
         }
 
-        // 一鍵匯出所有圖表 PNG
+        // 一鍵匯出所有圖表獨立 PNG
         window.exportAllChartsPNG = function() {
             for (let i = 1; i <= 6; i++) {
                 const canvas = document.getElementById(`chartCanvas_${i}`);
                 if (canvas) {
-                    // 若尚未載入過該分頁，先短暫渲染以確保 canvas 存在
                     if (!activeCharts[i]) {
                         switchChartTab(i);
                     }
@@ -677,8 +699,93 @@
                     document.body.removeChild(link);
                 }
             }
-            switchChartTab(currentChartTab); // 回到原本檢視的分頁
-            showToast("已成功匯出所有圖表 PNG 檔案！");
+            switchChartTab(currentChartTab);
+            showToast("已成功匯出所有獨立圖表 PNG！");
+        }
+
+        // 一鍵匯出 6 合一圖表 (PNG)
+        window.exportCombined6in1PNG = async function() {
+            // 先確保所有 6 個圖表都已經被渲染過
+            const originalTab = currentChartTab;
+            const tempCanvases = [];
+
+            for (let i = 1; i <= 6; i++) {
+                switchChartTab(i);
+                // 等待微小延遲讓 Chart 繪製完成
+                await new Promise(resolve => setTimeout(resolve, 150));
+                const canvas = document.getElementById(`chartCanvas_${i}`);
+                if (canvas) {
+                    tempCanvases.push(canvas);
+                }
+            }
+            switchChartTab(originalTab); // 回到原本的使用者分頁
+
+            // 建立一個高畫質的合成畫布 (2欄 x 3列 排版)
+            const combinedCanvas = document.createElement('canvas');
+            const targetWidth = 2400; // 總寬度
+            const targetHeight = 1800; // 總高度
+            combinedCanvas.width = targetWidth;
+            combinedCanvas.height = targetHeight;
+            const ctx = combinedCanvas.getContext('2d');
+
+            // 填滿白色背景
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+            // 繪製標題
+            ctx.fillStyle = '#111827';
+            ctx.font = 'bold 42px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('工廠新品開發綜合圖表分析報表 (6合一總結)', targetWidth / 2, 70);
+
+            // 定義子圖表在 2x3 網格中的位置
+            const cols = 2;
+            const rows = 3;
+            const marginX = 80;
+            const marginY = 120;
+            const spacingX = 60;
+            const spacingY = 60;
+
+            const panelWidth = (targetWidth - (marginX * 2) - (spacingX * (cols - 1))) / cols;
+            const panelHeight = (targetHeight - marginY - 100 - (spacingY * (rows - 1))) / rows;
+
+            let loadedImages = 0;
+
+            tempCanvases.forEach((srcCanvas, idx) => {
+                const img = new Image();
+                img.src = srcCanvas.toDataURL('image/png');
+                img.onload = () => {
+                    const c = idx % cols;
+                    const r = Math.floor(idx / cols);
+                    const x = marginX + c * (panelWidth + spacingX);
+                    const y = marginY + 40 + r * (panelHeight + spacingY);
+
+                    // 繪製子圖表外框與背景
+                    ctx.strokeStyle = '#e5e7eb';
+                    ctx.lineWidth = 4;
+                    ctx.fillStyle = '#f9fafb';
+                    ctx.beginPath();
+                    ctx.roundRect(x, y, panelWidth, panelHeight, 16);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 繪製子圖表影像
+                    ctx.drawImage(img, x + 20, y + 20, panelWidth - 40, panelHeight - 40);
+
+                    loadedImages++;
+                    if (loadedImages === tempCanvases.length) {
+                        // 全部繪製完成後下載
+                        const combinedURL = combinedCanvas.toDataURL('image/png');
+                        const link = document.createElement('a');
+                        link.href = combinedURL;
+                        link.download = `工廠新品追蹤_6合一綜合分析圖表_${new Date().toISOString().slice(0,10)}.png`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        showToast("已成功匯出 6 合一綜合圖表 PNG！");
+                    }
+                };
+            });
         }
 
         function showToast(msg) {
@@ -757,7 +864,7 @@
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <button id="analyze-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
-                        <i class="fa-solid fa-chart-pie mr-1.5"></i> 總和圖表分析
+                        <i class="fa-solid fa-chart-pie mr-1.5"></i> 綜合圖表分析
                     </button>
                     <button id="export-excel-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition flex items-center">
                         <i class="fa-solid fa-file-excel mr-1.5"></i> 匯出 Excel
@@ -782,11 +889,11 @@
         </main>
     </div>
 
-    <!-- 總和圖表分析彈跳視窗 (Modal) -->
+    <!-- 綜合圖表分析彈跳視窗 (Modal) -->
     <div id="chart-modal" class="hidden fixed inset-0 bg-white z-50 flex flex-col">
         <header class="bg-gray-900 text-white px-6 py-4 flex flex-wrap justify-between items-center shadow-md gap-4">
             <div class="flex items-center space-x-2 overflow-x-auto py-1">
-                <h2 class="text-base font-bold whitespace-nowrap mr-2"><i class="fa-solid fa-chart-line text-purple-400 mr-2"></i>總和圖表分析</h2>
+                <h2 class="text-base font-bold whitespace-nowrap mr-2"><i class="fa-solid fa-chart-line text-purple-400 mr-2"></i>綜合圖表分析</h2>
                 <button id="tab-btn-1" onclick="switchChartTab(1)" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold shadow whitespace-nowrap">1. 累積完成件數</button>
                 <button id="tab-btn-2" onclick="switchChartTab(2)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">2. 各站完成日分析</button>
                 <button id="tab-btn-3" onclick="switchChartTab(3)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">3. 各站時間瓶頸</button>
@@ -795,8 +902,11 @@
                 <button id="tab-btn-6" onclick="switchChartTab(6)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">6. 全產品 PO 至入庫天數</button>
             </div>
             <div class="flex items-center space-x-3">
+                <button id="export-combined-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap" title="將全部 6 個圖表自動合併為一張高畫質總結大圖下載">
+                    <i class="fa-solid fa-file-image mr-1.5"></i> 📊 匯出 6 合一圖表 (PNG)
+                </button>
                 <button id="export-charts-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap">
-                    <i class="fa-solid fa-download mr-1.5"></i> 匯出所有圖表 PNG
+                    <i class="fa-solid fa-download mr-1.5"></i> 匯出獨立圖表
                 </button>
                 <button onclick="closeChartModal()" class="text-gray-300 hover:text-white text-3xl font-bold px-2">&times;</button>
             </div>
