@@ -66,7 +66,7 @@
                     "產品品號": "PN-A001", "客戶品號": "CUST-001", "製令編號": "MO-2026-001", "PO下單日": "2026-09-25", "圖面繪製完成日": "2026-10-01", 
                     "BOM完成日": "2026-10-02", "多部門會簽完成日": "2026-10-02", "材料到廠日": "2026-10-03", "製造開始加工日": "2026-10-04", 
                     "製造完成加工日": "2026-10-06", "其他(半品)等待開始日": "", "其他(半品)完成日": "", "委外完成日": "", "品保開始檢驗日": "2026-10-07", "品保完成檢驗日": "2026-10-07", 
-                    "異常返修完工日": "", "異常返修檢驗完成日": "", "產品入庫日": "2026-10-08", "目標完成日": "2026-10-10", "備註": "首件試產順利", "是否有重工": "無" 
+                    "異常返修完工日": "", "異常返修檢驗完成日": "", "產品入庫日": "2026-10-08", "目標完成日": "2026-10-10", "備註": "首件試產順利", "是否有重工": "" 
                 } 
             },
             { 
@@ -76,7 +76,7 @@
                     "產品品號": "PN-A002", "客戶品號": "CUST-002", "製令編號": "MO-2026-002", "PO下單日": "2026-09-20", "圖面繪製完成日": "2026-09-25", 
                     "BOM完成日": "2026-09-26", "多部門會簽完成日": "2026-09-27", "材料到廠日": "2026-09-28", "製造開始加工日": "2026-09-30", 
                     "製造完成加工日": "2026-10-05", "其他(半品)等待開始日": "", "其他(半品)完成日": "", "委外完成日": "", "品保開始檢驗日": "2026-10-06", "品保完成檢驗日": "2026-10-07", 
-                    "異常返修完工日": "2026-10-08", "異常返修檢驗完成日": "2026-10-09", "產品入庫日": "2026-10-10", "目標完成日": "2026-10-01", "備註": "尺寸異常重工", "是否有重工": "有" 
+                    "異常返修完工日": "2026-10-08", "異常返修檢驗完成日": "2026-10-09", "產品入庫日": "2026-10-10", "目標完成日": "2026-10-01", "備註": "尺寸異常重工", "是否有重工": "有重工" 
                 } 
             }
         ];
@@ -477,7 +477,6 @@
                 }
             }
 
-            // 僅計算未被隱藏的產品資料
             const activeTableData = tableData.filter(r => !r.isHidden);
             const lastRow = activeTableData[activeTableData.length - 1];
             const lastCustPN = lastRow ? (lastRow.data["客戶品號"] || "最新項目") : "";
@@ -688,16 +687,20 @@
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 4) {
-                let totalCount = activeTableData.length;
-                let reworkCount = activeTableData.filter(row => row.data["是否有重工"] && (row.data["是否有重工"].includes("yes") || row.data["是否有重工"].includes("有"))).length;
-                let passFirstTime = totalCount - reworkCount;
-                let passRate = totalCount > 0 ? ((passFirstTime / totalCount) * 100).toFixed(1) : 0.0;
+                // 一次通過率計算：分母為「有填客戶產品的列總數」，重工計次為「是否有重工欄位有填任意文字」
+                const validRows = activeTableData.filter(row => row.data["客戶品號"] && row.data["客戶品號"].trim() !== "");
+                let totalValidCount = validRows.length;
+                let reworkCount = validRows.filter(row => row.data["是否有重工"] && row.data["是否有重工"].trim() !== "").length;
+                let passFirstTimeCount = totalValidCount - reworkCount;
+                if (passFirstTimeCount < 0) passFirstTimeCount = 0;
+                let passRate = totalValidCount > 0 ? ((passFirstTimeCount / totalValidCount) * 100).toFixed(1) : "0.0";
+
                 activeCharts[4] = new Chart(ctx, {
                     type: 'doughnut',
                     data: {
                         labels: ['一次通過件數', '重工件數'],
                         datasets: [{
-                            data: [passFirstTime, reworkCount],
+                            data: [passFirstTimeCount, reworkCount],
                             backgroundColor: ['#10b981', '#ef4444'],
                             borderWidth: 1
                         }]
@@ -706,7 +709,7 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            title: { display: true, text: `新品開發一次通過率: ${passRate}% (總數: ${totalCount} 件，已排除隱藏)`, font: { size: 16 } },
+                            title: { display: true, text: `新品開發一次通過率: ${passRate}% (有效總數: ${totalValidCount} 件，重工: ${reworkCount} 件)`, font: { size: 16 } },
                             legend: { position: 'bottom' }
                         }
                     }
