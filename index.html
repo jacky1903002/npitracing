@@ -10,6 +10,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Chart.js (圖表分析) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js DataLabels Plugin (用於氣球提示標籤) -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <!-- FontAwesome 圖標 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Firebase SDK (v9 模組化版本 CDN) -->
@@ -87,7 +89,7 @@
                     document.getElementById('user-email').innerText = user.email;
                     loadDataFromCloud();
                 } else {
-                    loginSection.classList.remove('hidden');
+                    loginSection.classList.add('hidden');
                     appSection.classList.add('hidden');
                 }
             });
@@ -410,6 +412,10 @@
                 activeCharts[tabNum].destroy();
             }
 
+            // 取得最後一筆資料的客戶品號 (用於氣球標籤)
+            const lastRow = tableData[tableData.length - 1];
+            const lastCustPN = lastRow ? (lastRow.data["客戶品號"] || "最新項目") : "";
+
             if (tabNum === 1) {
                 const dateCounts = {};
                 tableData.forEach(row => {
@@ -443,18 +449,40 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { title: { display: true, text: '新品開發累積完成首件件數趨勢圖', font: { size: 16 } } },
+                        plugins: {
+                            title: { display: true, text: '新品開發累積完成首件件數趨勢圖', font: { size: 16 } },
+                            datalabels: {
+                                align: 'top',
+                                anchor: 'end',
+                                formatter: function(value, context) {
+                                    if (context.dataIndex === context.dataset.data.length - 1) {
+                                        return `${lastCustPN} (${value})`;
+                                    }
+                                    return '';
+                                },
+                                backgroundColor: '#1e293b',
+                                borderColor: '#3b82f6',
+                                borderWidth: 1,
+                                borderRadius: 6,
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 11 },
+                                padding: 6
+                            }
+                        },
                         scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-                    }
+                    },
+                    plugins: [ChartDataLabels]
                 });
 
             } else if (tabNum === 2) {
+                // 圖表 2：各站完成日分析 (起點0從PO下單日算起, 數值取到小數點第一位, 最後一個點帶客戶品號氣球)
                 const stations = [
-                    "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", 
+                    "PO下單日", "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", 
                     "製造開始加工日", "製造完成加工日", "品保完成檢驗日", "產品入庫日"
                 ];
                 
-                const avgDaysPerStation = stations.map(st => {
+                const avgDaysPerStation = stations.map((st, sIdx) => {
+                    if (sIdx === 0) return 0.0; // PO下單日自身為0
                     let totalDays = 0;
                     let count = 0;
                     tableData.forEach(row => {
@@ -468,7 +496,7 @@
                             }
                         }
                     });
-                    return count > 0 ? (totalDays / count).toFixed(1) : 0;
+                    return count > 0 ? parseFloat((totalDays / count).toFixed(1)) : 0.0;
                 });
 
                 activeCharts[2] = new Chart(ctx, {
@@ -489,13 +517,36 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { title: { display: true, text: '各站點平均累積天數折線分析圖 (自 PO 下單起算)', font: { size: 16 } } },
+                        plugins: {
+                            title: { display: true, text: '各站點平均累積天數折線分析圖 (自 PO 下單起算，單位: 天)', font: { size: 16 } },
+                            datalabels: {
+                                align: 'top',
+                                anchor: 'end',
+                                formatter: function(value, context) {
+                                    if (context.dataIndex === context.dataset.data.length - 1) {
+                                        return `${lastCustPN} (${value.toFixed(1)}天)`;
+                                    }
+                                    return '';
+                                },
+                                backgroundColor: '#1e293b',
+                                borderColor: '#10b981',
+                                borderWidth: 1,
+                                borderRadius: 6,
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 11 },
+                                padding: 6
+                            }
+                        },
                         scales: { y: { beginAtZero: true, title: { display: true, text: '累積天數 (Days)' } } }
-                    }
+                    },
+                    plugins: [ChartDataLabels]
                 });
 
             } else if (tabNum === 3) {
+                // 圖表 3：各站時間瓶頸 (改為折線圖, 數值取到小數第一位, 最後一個點帶氣球)
+                const durationKeys = ["PO下單至圖面完成", "圖面完成至材料到廠", "材料到廠至開始加工", "製造加工耗時", "品保檢驗耗時", "總前置時間(PO到入庫)"];
                 const durations = { "PO下單至圖面完成": [], "圖面完成至材料到廠": [], "材料到廠至開始加工": [], "製造加工耗時": [], "品保檢驗耗時": [], "總前置時間(PO到入庫)": [] };
+
                 tableData.forEach(row => {
                     const d_po = row.data["PO下單日"];
                     const d_draw = row.data["圖面繪製完成日"];
@@ -519,26 +570,57 @@
                     if (diffDays(d_po, d_in) !== null) durations["總前置時間(PO到入庫)"].push(diffDays(d_po, d_in));
                 });
 
-                const avg = arr => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : 0;
+                const avg = arr => arr.length ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : 0.0;
+                const avgData = durationKeys.map(k => avg(durations[k]));
+
                 activeCharts[3] = new Chart(ctx, {
-                    type: 'bar',
+                    type: 'line',
                     data: {
-                        labels: Object.keys(durations),
-                        datasets: [{ label: '平均耗時 (天)', data: Object.keys(durations).map(k => avg(durations[k])), backgroundColor: 'rgba(217, 119, 6, 0.7)', borderWidth: 1 }]
+                        labels: durationKeys,
+                        datasets: [{
+                            label: '平均耗時 (天)',
+                            data: avgData,
+                            borderColor: 'rgba(217, 119, 6, 1)',
+                            backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                            fill: true,
+                            tension: 0.2,
+                            borderWidth: 3,
+                            pointRadius: 5
+                        }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { title: { display: true, text: '各站點平均流轉與加工天數分析 (瓶頸分析)', font: { size: 16 } } },
+                        plugins: {
+                            title: { display: true, text: '各站點平均流轉與加工天數瓶頸折線分析 (單位: 天)', font: { size: 16 } },
+                            datalabels: {
+                                align: 'top',
+                                anchor: 'end',
+                                formatter: function(value, context) {
+                                    if (context.dataIndex === context.dataset.data.length - 1) {
+                                        return `${lastCustPN} (${value.toFixed(1)}天)`;
+                                    }
+                                    return '';
+                                },
+                                backgroundColor: '#1e293b',
+                                borderColor: '#d97706',
+                                borderWidth: 1,
+                                borderRadius: 6,
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 11 },
+                                padding: 6
+                            }
+                        },
                         scales: { y: { beginAtZero: true, title: { display: true, text: '天數 (Days)' } } }
-                    }
+                    },
+                    plugins: [ChartDataLabels]
                 });
 
             } else if (tabNum === 4) {
                 let totalCount = tableData.length;
                 let reworkCount = tableData.filter(row => row.data["是否有重工"] && (row.data["是否有重工"].includes("有") || row.data["是否有重工"].toLowerCase() === "yes")).length;
                 let passFirstTime = totalCount - reworkCount;
-                let passRate = totalCount > 0 ? ((passFirstTime / totalCount) * 100).toFixed(1) : 0;
+                let passRate = totalCount > 0 ? ((passFirstTime / totalCount) * 100).toFixed(1) : 0.0;
 
                 activeCharts[4] = new Chart(ctx, {
                     type: 'doughnut',
@@ -561,17 +643,18 @@
                 });
 
             } else if (tabNum === 5) {
+                // 圖表 5：客戶品號對 GAP 天數的散布圖 (最後一個點帶氣球)
                 const scatterData = [];
                 const productLabels = [];
 
                 tableData.forEach((row, idx) => {
-                    const pn = row.data["產品品號"] || `項次 ${idx+1}`;
-                    productLabels.push(pn);
+                    const custPn = row.data["客戶品號"] || `項次 ${idx+1}`;
+                    productLabels.push(custPn);
                     const target = row.data["目標完成日"];
                     const actual = row.data["產品入庫日"] || new Date().toISOString().slice(0, 10);
                     if (target) {
-                        const diff = (new Date(actual).getTime() - new Date(new Date(target).toDateString()).getTime()) / (1000 * 3600 * 24);
-                        scatterData.push({ x: idx + 1, y: diff, productName: pn });
+                        const diff = parseFloat(((new Date(actual).getTime() - new Date(new Date(target).toDateString()).getTime()) / (1000 * 3600 * 24)).toFixed(1));
+                        scatterData.push({ x: idx + 1, y: diff, custName: custPn });
                     }
                 });
 
@@ -579,7 +662,7 @@
                     type: 'scatter',
                     data: {
                         datasets: [{
-                            label: '產品與目標日 GAP (天)',
+                            label: '客戶品號與目標日 GAP (天)',
                             data: scatterData,
                             backgroundColor: scatterData.map(d => d.y <= 0 ? '#10b981' : '#ef4444'),
                             pointRadius: 8,
@@ -590,19 +673,36 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            title: { display: true, text: '目標日 GAP 散布分析圖 (產品品號 vs GAP 天數)', font: { size: 16 } },
+                            title: { display: true, text: '目標日 GAP 散布分析圖 (客戶品號 vs GAP 天數)', font: { size: 16 } },
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
                                         const point = context.raw;
-                                        return `${point.productName}: GAP ${point.y} 天`;
+                                        return `${point.custName}: GAP ${point.y} 天`;
                                     }
                                 }
+                            },
+                            datalabels: {
+                                align: 'top',
+                                anchor: 'end',
+                                formatter: function(value, context) {
+                                    if (context.dataIndex === context.dataset.data.length - 1) {
+                                        return `${value.custName} (${value.y > 0 ? '+' + value.y : value.y}天)`;
+                                    }
+                                    return '';
+                                },
+                                backgroundColor: '#1e293b',
+                                borderColor: '#3b82f6',
+                                borderWidth: 1,
+                                borderRadius: 6,
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 11 },
+                                padding: 6
                             }
                         },
                         scales: {
                             x: {
-                                title: { display: true, text: '產品品號' },
+                                title: { display: true, text: '客戶品號' },
                                 ticks: {
                                     callback: function(val) {
                                         return productLabels[val - 1] || '';
@@ -614,22 +714,24 @@
                                 title: { display: true, text: 'GAP 天數 (實際 - 目標)' }
                             }
                         }
-                    }
+                    },
+                    plugins: [ChartDataLabels]
                 });
 
             } else if (tabNum === 6) {
+                // 圖表 6：全產品 PO 至入庫天數散布圖 (最後一個點帶氣球)
                 const scatterData = [];
                 const productLabels = [];
 
                 tableData.forEach((row, idx) => {
-                    const pn = row.data["產品品號"] || `項次 ${idx+1}`;
-                    productLabels.push(pn);
+                    const custPn = row.data["客戶品號"] || `項次 ${idx+1}`;
+                    productLabels.push(custPn);
                     const po = row.data["PO下單日"];
                     const inDate = row.data["產品入庫日"];
                     if (po && inDate) {
-                        const days = (new Date(inDate).getTime() - new Date(po).getTime()) / (1000 * 3600 * 24);
+                        const days = parseFloat(((new Date(inDate).getTime() - new Date(po).getTime()) / (1000 * 3600 * 24)).toFixed(1));
                         if (days >= 0) {
-                            scatterData.push({ x: idx + 1, y: days, productName: pn });
+                            scatterData.push({ x: idx + 1, y: days, custName: custPn });
                         }
                     }
                 });
@@ -652,19 +754,36 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: { 
-                            title: { display: true, text: `全產品一覽：PO 到入庫總天數散布圖 (本月累計入庫總數: ${monthInCount} 件)`, font: { size: 16 } },
+                            title: { display: true, text: `全產品一覽：PO 到入庫總天數散布圖 (本月累計入庫總數: ${monthInCount} 件，單位: 天)`, font: { size: 16 } },
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
                                         const point = context.raw;
-                                        return `${point.productName}: 總天數 ${point.y} 天`;
+                                        return `${point.custName}: 總天數 ${point.y} 天`;
                                     }
                                 }
+                            },
+                            datalabels: {
+                                align: 'top',
+                                anchor: 'end',
+                                formatter: function(value, context) {
+                                    if (context.dataIndex === context.dataset.data.length - 1) {
+                                        return `${value.custName} (${value.y}天)`;
+                                    }
+                                    return '';
+                                },
+                                backgroundColor: '#1e293b',
+                                borderColor: '#3b82f6',
+                                borderWidth: 1,
+                                borderRadius: 6,
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 11 },
+                                padding: 6
                             }
                         },
                         scales: { 
                             x: {
-                                title: { display: true, text: '產品品號' },
+                                title: { display: true, text: '客戶品號' },
                                 ticks: {
                                     callback: function(val) {
                                         return productLabels[val - 1] || '';
@@ -677,7 +796,8 @@
                                 title: { display: true, text: '總天數 (Days)' } 
                             } 
                         }
-                    }
+                    },
+                    plugins: [ChartDataLabels]
                 });
             }
         }
@@ -705,40 +825,34 @@
 
         // 一鍵匯出 6 合一圖表 (PNG)
         window.exportCombined6in1PNG = async function() {
-            // 先確保所有 6 個圖表都已經被渲染過
             const originalTab = currentChartTab;
             const tempCanvases = [];
 
             for (let i = 1; i <= 6; i++) {
                 switchChartTab(i);
-                // 等待微小延遲讓 Chart 繪製完成
                 await new Promise(resolve => setTimeout(resolve, 150));
                 const canvas = document.getElementById(`chartCanvas_${i}`);
                 if (canvas) {
                     tempCanvases.push(canvas);
                 }
             }
-            switchChartTab(originalTab); // 回到原本的使用者分頁
+            switchChartTab(originalTab);
 
-            // 建立一個高畫質的合成畫布 (2欄 x 3列 排版)
             const combinedCanvas = document.createElement('canvas');
-            const targetWidth = 2400; // 總寬度
-            const targetHeight = 1800; // 總高度
+            const targetWidth = 2400;
+            const targetHeight = 1800;
             combinedCanvas.width = targetWidth;
             combinedCanvas.height = targetHeight;
             const ctx = combinedCanvas.getContext('2d');
 
-            // 填滿白色背景
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, targetWidth, targetHeight);
 
-            // 繪製標題
             ctx.fillStyle = '#111827';
             ctx.font = 'bold 42px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('工廠新品開發綜合圖表分析報表 (6合一總結)', targetWidth / 2, 70);
 
-            // 定義子圖表在 2x3 網格中的位置
             const cols = 2;
             const rows = 3;
             const marginX = 80;
@@ -760,7 +874,6 @@
                     const x = marginX + c * (panelWidth + spacingX);
                     const y = marginY + 40 + r * (panelHeight + spacingY);
 
-                    // 繪製子圖表外框與背景
                     ctx.strokeStyle = '#e5e7eb';
                     ctx.lineWidth = 4;
                     ctx.fillStyle = '#f9fafb';
@@ -769,12 +882,10 @@
                     ctx.fill();
                     ctx.stroke();
 
-                    // 繪製子圖表影像
                     ctx.drawImage(img, x + 20, y + 20, panelWidth - 40, panelHeight - 40);
 
                     loadedImages++;
                     if (loadedImages === tempCanvases.length) {
-                        // 全部繪製完成後下載
                         const combinedURL = combinedCanvas.toDataURL('image/png');
                         const link = document.createElement('a');
                         link.href = combinedURL;
@@ -898,7 +1009,7 @@
                 <button id="tab-btn-2" onclick="switchChartTab(2)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">2. 各站完成日分析</button>
                 <button id="tab-btn-3" onclick="switchChartTab(3)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">3. 各站時間瓶頸</button>
                 <button id="tab-btn-4" onclick="switchChartTab(4)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">4. 一次通過率</button>
-                <button id="tab-btn-5" onclick="switchChartTab(5)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">5. 目標日 GAP 散布</button>
+                <button id="tab-btn-5" onclick="switchChartTab(5)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">5. 客戶品號 GAP 散布</button>
                 <button id="tab-btn-6" onclick="switchChartTab(6)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">6. 全產品 PO 至入庫天數</button>
             </div>
             <div class="flex items-center space-x-3">
