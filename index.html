@@ -780,7 +780,7 @@
             }
         }
 
-        // ================= 渲染第二頁的異常事件分析表格 =================
+        // ================= 渲染第二頁的異常事件分析表格（自動計算天數最長的站點） =================
         function renderAbnormalTable() {
             const tbody = document.getElementById('abnormal-table-body');
             if (!tbody) return;
@@ -788,35 +788,73 @@
             let html = '';
             let hasData = false;
 
+            const milestones = [
+                { key: "PO下單日", name: "PO下單" },
+                { key: "圖面繪製完成日", name: "圖面繪製" },
+                { key: "BOM完成日", name: "BOM完成" },
+                { key: "多部門會簽完成日", name: "多部門會簽" },
+                { key: "材料到廠日", name: "材料到廠" },
+                { key: "製造開始加工日", name: "製造開始加工" },
+                { key: "製造完成加工日", name: "製造完成加工" },
+                { key: "其他(半品)等待開始日", name: "半品等待開始" },
+                { key: "其他(半品)完成日", name: "半品完成" },
+                { key: "委外完成日", name: "委外完成" },
+                { key: "品保開始檢驗日", name: "品保開始檢驗" },
+                { key: "品保完成檢驗日", name: "品保完成檢驗" },
+                { key: "異常返修完工日", name: "異常返修完工" },
+                { key: "異常返修檢驗完成日", name: "異常返修檢驗" },
+                { key: "產品入庫日", name: "產品入庫" }
+            ];
+
             tableData.forEach(row => {
                 const remark = row.data["備註"];
                 if (remark && remark.trim() !== "") {
                     hasData = true;
                     const custPn = row.data["客戶品號"] || "N/A";
                     
-                    let abnormalStation = "備註說明";
-                    let abnormalDays = 0;
-                    
-                    const d_po = row.data["PO下單日"];
-                    const d_qcEnd = row.data["品保完成檢驗日"] || row.data["品保開始檢驗日"];
+                    let maxDays = 0;
+                    let longestStation = "製造/品保站";
 
-                    if (row.data["異常返修完工日"] && d_po) {
-                        abnormalStation = "異常返修站";
-                        const startRef = row.data["品保開始檢驗日"] || d_po;
-                        abnormalDays = Math.max(0, Math.round((new Date(row.data["異常返修完工日"]).getTime() - new Date(startRef).getTime()) / (1000 * 3600 * 24)));
-                    } else {
-                        abnormalStation = "製造/品保站";
-                        if (d_po && d_qcEnd) {
-                            abnormalDays = Math.max(0, Math.round((new Date(d_qcEnd).getTime() - new Date(d_po).getTime()) / (1000 * 3600 * 24)));
+                    const d_po = row.data["PO下單日"];
+                    let lastDate = d_po ? new Date(d_po).getTime() : null;
+                    let lastName = "PO下單";
+
+                    milestones.forEach(m => {
+                        if (m.key === "PO下單日") return;
+                        const val = row.data[m.key];
+                        if (val) {
+                            const curDate = new Date(val).getTime();
+                            if (lastDate !== null) {
+                                const diff = Math.round((curDate - lastDate) / (1000 * 3600 * 24));
+                                if (diff > maxDays) {
+                                    maxDays = diff;
+                                    longestStation = `${lastName} → ${m.name}`;
+                                }
+                            }
+                            if (d_po) {
+                                const fromPoDiff = Math.round((curDate - new Date(d_po).getTime()) / (1000 * 3600 * 24));
+                                if (fromPoDiff > maxDays) {
+                                    maxDays = fromPoDiff;
+                                    longestStation = m.name;
+                                }
+                            }
+                            lastDate = curDate;
+                            lastName = m.name;
                         }
+                    });
+
+                    // 若找不到明顯間距，退回預設計算
+                    if (maxDays === 0 && d_po && row.data["產品入庫日"]) {
+                        maxDays = Math.max(0, Math.round((new Date(row.data["產品入庫日"]).getTime() - new Date(d_po).getTime()) / (1000 * 3600 * 24)));
+                        longestStation = "PO下單 → 產品入庫";
                     }
 
                     html += `
                         <tr class="hover:bg-gray-50">
                             <td class="px-3 py-2 border-b font-medium text-gray-800">${remark}</td>
                             <td class="px-3 py-2 border-b text-gray-600">${custPn}</td>
-                            <td class="px-3 py-2 border-b text-gray-600">${abnormalStation}</td>
-                            <td class="px-3 py-2 border-b text-red-600 font-bold">${abnormalDays} 天</td>
+                            <td class="px-3 py-2 border-b text-gray-600">${longestStation}</td>
+                            <td class="px-3 py-2 border-b text-red-600 font-bold">${maxDays} 天</td>
                         </tr>
                     `;
                 }
@@ -1169,8 +1207,10 @@
                 await new Promise(resolve => setTimeout(resolve, 80));
                 
                 const img = new Image();
-                img.src = tempCanvas.toDataURL('image/png');
-                await new Promise(resolve => { img.onload = resolve; });
+                await new Promise(resolve => {
+                    img.onload = resolve;
+                    img.src = tempCanvas.toDataURL('image/png');
+                });
 
                 dummyChart.destroy();
 
@@ -1319,7 +1359,7 @@
                 <div class="w-full h-full max-w-6xl bg-white p-6 rounded-2xl shadow-xl relative flex flex-col items-center justify-center">
                     <div id="chart-view-1" class="w-full h-full"><canvas id="chartCanvas_1"></canvas></div>
                     
-                    <!-- 第二頁圖表與新增的異常事件分析表格 -->
+                    <!-- 第二頁圖表與異常事件分析表格 -->
                     <div id="chart-view-2" class="w-full h-full hidden flex flex-col">
                         <div class="w-full h-[60%]"><canvas id="chartCanvas_2"></canvas></div>
                         <div id="abnormal-analysis-container" class="w-full h-[40%] mt-3 border-t pt-3 overflow-y-auto">
