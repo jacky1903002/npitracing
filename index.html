@@ -446,7 +446,7 @@
 
         window.switchChartTab = function(tabNum) {
             currentChartTab = tabNum;
-            for (let i = 1; i <= 6; i++) {
+            for (let i = 1; i <= 7; i++) {
                 const btn = document.getElementById(`tab-btn-${i}`);
                 const view = document.getElementById(`chart-view-${i}`);
                 if (i === tabNum) {
@@ -457,7 +457,11 @@
                     view.classList.add('hidden');
                 }
             }
-            renderSpecificChart(tabNum);
+            if (tabNum === 7) {
+                renderAbnormalTable();
+            } else {
+                renderSpecificChart(tabNum);
+            }
         }
 
         function renderSpecificChart(tabNum) {
@@ -465,16 +469,6 @@
             const ctx = document.getElementById(canvasId).getContext('2d');
             if (activeCharts[tabNum]) {
                 activeCharts[tabNum].destroy();
-            }
-
-            const abnormalContainer = document.getElementById('abnormal-analysis-container');
-            if (abnormalContainer) {
-                if (tabNum === 2) {
-                    abnormalContainer.classList.remove('hidden');
-                    renderAbnormalTable();
-                } else {
-                    abnormalContainer.classList.add('hidden');
-                }
             }
 
             const activeTableData = tableData.filter(r => !r.isHidden);
@@ -508,14 +502,14 @@
                             backgroundColor: 'rgba(37, 99, 235, 0.1)',
                             fill: true,
                             tension: 0.2,
-                            borderWidth: 3
+                            borderWidth: 4
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            title: { display: true, text: '新品開發累積完成首件件數趨勢圖 (已排除隱藏項目)', font: { size: 16 } },
+                            title: { display: true, text: '新品開發累積完成首件件數趨勢圖 (已排除隱藏項目)', font: { size: 18, weight: 'bold' } },
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
@@ -526,11 +520,14 @@
                                     return '';
                                 },
                                 color: '#000000',
-                                font: { weight: 'bold', size: 12 },
-                                padding: 4
+                                font: { weight: 'bold', size: 14 },
+                                padding: 6
                             }
                         },
-                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                        scales: { 
+                            x: { ticks: { font: { size: 13 } } },
+                            y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 13 } } } 
+                        }
                     },
                     plugins: [ChartDataLabels]
                 });
@@ -565,16 +562,16 @@
                             backgroundColor: 'rgba(16, 185, 129, 0.1)',
                             fill: true,
                             tension: 0.2,
-                            borderWidth: 3,
-                            pointRadius: 6
+                            borderWidth: 4,
+                            pointRadius: 8
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 60, bottom: 20, right: 30, left: 20 } },
+                        layout: { padding: { top: 70, bottom: 30, right: 40, left: 20 } },
                         plugins: {
-                            title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (已排除隱藏項目)', font: { size: 16 } },
+                            title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (已排除隱藏項目)', font: { size: 18, weight: 'bold' } },
                             datalabels: {
                                 align: function(context) {
                                     return context.dataIndex % 2 === 0 ? 'top' : 'bottom';
@@ -600,16 +597,16 @@
                                     }
                                 },
                                 color: '#000000',
-                                font: { weight: 'bold', size: 10 },
-                                padding: 4
+                                font: { weight: 'bold', size: 12 },
+                                padding: 6
                             }
                         },
                         scales: { 
                             x: { 
                                 grace: '10%',
-                                ticks: { font: { size: 11 }, maxRotation: 45, minRotation: 45 }
+                                ticks: { font: { size: 13 }, maxRotation: 45, minRotation: 45 }
                             },
-                            y: { beginAtZero: true, title: { display: true, text: '累積天數 (Days)' } } 
+                            y: { beginAtZero: true, title: { display: true, text: '累積天數 (Days)', font: { size: 14 } }, ticks: { font: { size: 13 } } } 
                         }
                     },
                     plugins: [ChartDataLabels]
@@ -651,16 +648,16 @@
                             backgroundColor: 'rgba(217, 119, 6, 0.1)',
                             fill: true,
                             tension: 0.2,
-                            borderWidth: 3,
-                            pointRadius: 5
+                            borderWidth: 4,
+                            pointRadius: 7
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 50, right: 30, left: 20 } },
+                        layout: { padding: { top: 70, bottom: 30, right: 40, left: 20 } },
                         plugins: {
-                            title: { display: true, text: '各相鄰站點平均流轉與加工天數瓶頸分析 (已排除隱藏項目)', font: { size: 16 } },
+                            title: { display: true, text: '各相鄰站點平均流轉與加工天數瓶頸分析 (已排除隱藏項目)', font: { size: 18, weight: 'bold' } },
                             datalabels: {
                                 align: function(context) {
                                     return context.dataIndex % 2 === 0 ? 'top' : 'bottom';
@@ -672,22 +669,21 @@
                                     return `${value.toFixed(1)}d`;
                                 },
                                 color: '#000000',
-                                font: { weight: 'bold', size: 10 },
-                                padding: 4
+                                font: { weight: 'bold', size: 12 },
+                                padding: 6
                             }
                         },
                         scales: { 
                             x: { 
                                 grace: '10%',
-                                ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 45 }
+                                ticks: { font: { size: 12 }, maxRotation: 45, minRotation: 45 }
                             },
-                            y: { beginAtZero: true, title: { display: true, text: '天數 (Days)' } } 
+                            y: { beginAtZero: true, title: { display: true, text: '天數 (Days)', font: { size: 14 } }, ticks: { font: { size: 13 } } } 
                         }
                     },
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 4) {
-                // 一次通過率計算：分母為「有填客戶產品的列總數」，重工計次為「是否有重工欄位有填任意文字」
                 const validRows = activeTableData.filter(row => row.data["客戶品號"] && row.data["客戶品號"].trim() !== "");
                 let totalValidCount = validRows.length;
                 let reworkCount = validRows.filter(row => row.data["是否有重工"] && row.data["是否有重工"].trim() !== "").length;
@@ -702,15 +698,15 @@
                         datasets: [{
                             data: [passFirstTimeCount, reworkCount],
                             backgroundColor: ['#10b981', '#ef4444'],
-                            borderWidth: 1
+                            borderWidth: 2
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            title: { display: true, text: `新品開發一次通過率: ${passRate}% (有效總數: ${totalValidCount} 件，重工: ${reworkCount} 件)`, font: { size: 16 } },
-                            legend: { position: 'bottom' }
+                            title: { display: true, text: `新品開發一次通過率: ${passRate}% (有效總數: ${totalValidCount} 件，重工: ${reworkCount} 件)`, font: { size: 18, weight: 'bold' } },
+                            legend: { position: 'bottom', labels: { font: { size: 15 } } }
                         }
                     }
                 });
@@ -735,16 +731,16 @@
                             label: '目標 vs 實際 GAP (天)',
                             data: scatterData,
                             backgroundColor: '#8b5cf6',
-                            pointRadius: 8,
-                            pointHoverRadius: 10
+                            pointRadius: 10,
+                            pointHoverRadius: 12
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 35, right: 30 } },
+                        layout: { padding: { top: 50, right: 40 } },
                         plugins: {
-                            title: { display: true, text: '各專案目標完成日 vs 實際入庫日 GAP 散布圖 (已排除隱藏項目)', font: { size: 16 } },
+                            title: { display: true, text: '各專案目標完成日 vs 實際入庫日 GAP 散布圖 (+超前/-落後)', font: { size: 18, weight: 'bold' } },
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
@@ -755,22 +751,26 @@
                                     return `${value.custName}`;
                                 },
                                 color: '#000000',
-                                font: { weight: 'bold', size: 12 },
-                                padding: 4
+                                font: { weight: 'bold', size: 13 },
+                                padding: 6
                             }
                         },
                         scales: {
                             x: {
                                 grace: '10%',
-                                title: { display: true, text: '客戶品號' },
+                                title: { display: true, text: '客戶品號', font: { size: 14 } },
                                 ticks: {
                                     callback: function(val) {
                                         return productLabels[val - 1] || '';
                                     },
-                                    stepSize: 1
+                                    stepSize: 1,
+                                    font: { size: 13 }
                                 }
                             },
-                            y: { title: { display: true, text: 'GAP 天數 (實際 - 目標)' } }
+                            y: { 
+                                title: { display: true, text: 'GAP 天數 (實際 - 目標)', font: { size: 14 } },
+                                ticks: { font: { size: 13 } }
+                            }
                         }
                     },
                     plugins: [ChartDataLabels]
@@ -804,16 +804,16 @@
                             label: 'PO 到入庫總天數',
                             data: scatterData,
                             backgroundColor: '#3b82f6',
-                            pointRadius: 8,
-                            pointHoverRadius: 10
+                            pointRadius: 10,
+                            pointHoverRadius: 12
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 35, right: 30 } },
+                        layout: { padding: { top: 50, right: 40 } },
                         plugins: {
-                            title: { display: true, text: `全產品一覽：PO 到入庫總天數散布圖 (本月入庫數: ${monthInCount} 件，已排除隱藏)`, font: { size: 16 } },
+                            title: { display: true, text: `全產品一覽：PO 到入庫總天數散布圖 (本月入庫數: ${monthInCount} 件)`, font: { size: 18, weight: 'bold' } },
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
@@ -824,22 +824,27 @@
                                     return `${value.custName}`;
                                 },
                                 color: '#000000',
-                                font: { weight: 'bold', size: 12 },
-                                padding: 4
+                                font: { weight: 'bold', size: 13 },
+                                padding: 6
                             }
                         },
                         scales: {
                             x: {
                                 grace: '10%',
-                                title: { display: true, text: '客戶品號' },
+                                title: { display: true, text: '客戶品號', font: { size: 14 } },
                                 ticks: {
                                     callback: function(val) {
                                         return productLabels[val - 1] || '';
                                     },
-                                    stepSize: 1
+                                    stepSize: 1,
+                                    font: { size: 13 }
                                 }
                             },
-                            y: { title: { display: true, text: '總天數 (Days)' }, beginAtZero: true }
+                            y: { 
+                                title: { display: true, text: '總天數 (Days)', font: { size: 14 } }, 
+                                beginAtZero: true,
+                                ticks: { font: { size: 13 } }
+                            }
                         }
                     },
                     plugins: [ChartDataLabels]
@@ -847,7 +852,7 @@
             }
         }
 
-        // ================= 異常事件分析表格 =================
+        // ================= 異常事件分析表格 (獨立為圖7) =================
         function renderAbnormalTable() {
             const tbody = document.getElementById('abnormal-table-body');
             if (!tbody) return;
@@ -886,18 +891,18 @@
                     });
 
                     html += `
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-3 py-2 border-b font-medium text-gray-800">${remark}</td>
-                            <td class="px-3 py-2 border-b text-gray-600">${custPn}</td>
-                            <td class="px-3 py-2 border-b text-gray-600">${longestIntervalName}</td>
-                            <td class="px-3 py-2 border-b text-red-600 font-bold">${maxIntervalDays} 天</td>
+                        <tr class="hover:bg-gray-50 text-sm">
+                            <td class="px-4 py-3 border-b font-medium text-gray-800">${remark}</td>
+                            <td class="px-4 py-3 border-b text-gray-600">${custPn}</td>
+                            <td class="px-4 py-3 border-b text-gray-600">${longestIntervalName}</td>
+                            <td class="px-4 py-3 border-b text-red-600 font-bold">${maxIntervalDays} 天</td>
                         </tr>
                     `;
                 }
             });
 
             if (!hasData) {
-                html = `<tr><td colspan="4" class="px-3 py-4 text-center text-gray-400">目前尚無未隱藏之備註或異常事件紀錄</td></tr>`;
+                html = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">目前尚無未隱藏之備註或異常事件紀錄</td></tr>`;
             }
             tbody.innerHTML = html;
         }
@@ -1005,8 +1010,8 @@
 
     <!-- 綜合圖表分析 Modal -->
     <div id="chart-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-white w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-            <div class="bg-gray-900 px-6 py-3 flex items-center justify-between border-b border-gray-800 flex-wrap gap-2">
+        <div class="bg-white w-full max-w-7xl h-[95vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            <div class="bg-gray-900 px-6 py-3.5 flex items-center justify-between border-b border-gray-800 flex-wrap gap-2">
                 <div class="flex items-center space-x-2 overflow-x-auto py-1">
                     <button id="tab-btn-1" onclick="switchChartTab(1)" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold shadow whitespace-nowrap">1. 累積完成趨勢</button>
                     <button id="tab-btn-2" onclick="switchChartTab(2)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">2. 站點平均天數</button>
@@ -1014,32 +1019,40 @@
                     <button id="tab-btn-4" onclick="switchChartTab(4)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">4. 一次通過率</button>
                     <button id="tab-btn-5" onclick="switchChartTab(5)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">5. 客戶品號 GAP 散布</button>
                     <button id="tab-btn-6" onclick="switchChartTab(6)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">6. 全產品 PO 至入庫</button>
+                    <button id="tab-btn-7" onclick="switchChartTab(7)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">7. 異常事件分析</button>
                 </div>
                 <div class="flex items-center space-x-2">
                     <button onclick="closeChartModal()" class="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-800 transition">
-                        <i class="fa-solid fa-xmark text-lg"></i>
+                        <i class="fa-solid fa-xmark text-xl"></i>
                     </button>
                 </div>
             </div>
 
             <div class="flex-1 p-6 flex flex-col items-center justify-center bg-gray-50 overflow-y-auto">
-                <div class="w-full h-full max-w-6xl bg-white p-6 rounded-2xl shadow-xl relative flex flex-col items-center justify-center">
+                <div class="w-full h-full max-w-7xl bg-white p-6 rounded-2xl shadow-xl relative flex flex-col items-center justify-center">
                     <div id="chart-view-1" class="w-full h-full"><canvas id="chartCanvas_1"></canvas></div>
+                    <div id="chart-view-2" class="w-full h-full hidden"><canvas id="chartCanvas_2"></canvas></div>
+                    <div id="chart-view-3" class="w-full h-full hidden"><canvas id="chartCanvas_3"></canvas></div>
+                    <div id="chart-view-4" class="w-full h-full hidden"><canvas id="chartCanvas_4"></canvas></div>
+                    <div id="chart-view-5" class="w-full h-full hidden"><canvas id="chartCanvas_5"></canvas></div>
+                    <div id="chart-view-6" class="w-full h-full hidden"><canvas id="chartCanvas_6"></canvas></div>
                     
-                    <!-- 第二頁圖表與異常事件分析表格 -->
-                    <div id="chart-view-2" class="w-full h-full hidden flex flex-col">
-                        <div class="w-full h-[60%]"><canvas id="chartCanvas_2"></canvas></div>
-                        <div id="abnormal-analysis-container" class="w-full h-[40%] mt-3 border-t pt-3 overflow-y-auto">
-                            <h3 class="text-xs font-bold text-gray-700 mb-2 flex items-center">
-                                <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1.5"></i> 備註異常事件分析列表
-                            </h3>
-                            <table class="w-full border-collapse text-left text-xs">
-                                <thead class="bg-gray-100 text-gray-600">
+                    <!-- 獨立的第 7 頁：異常事件分析表格 -->
+                    <div id="chart-view-7" class="w-full h-full hidden flex flex-col overflow-y-auto">
+                        <div class="flex items-center justify-between mb-4 border-b pb-3">
+                            <h2 class="text-lg font-bold text-gray-800 flex items-center">
+                                <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-2 text-xl"></i> 備註異常事件分析列表 (圖 7)
+                            </h2>
+                            <span class="text-xs text-gray-500">已自動排除隱藏項目</span>
+                        </div>
+                        <div class="flex-1 overflow-y-auto border rounded-xl shadow-inner bg-white">
+                            <table class="w-full border-collapse text-left text-sm">
+                                <thead class="bg-gray-100 text-gray-700 sticky top-0 z-10">
                                     <tr>
-                                        <th class="px-3 py-1.5 border-b">備註原因</th>
-                                        <th class="px-3 py-1.5 border-b">客戶品號</th>
-                                        <th class="px-3 py-1.5 border-b">異常站點</th>
-                                        <th class="px-3 py-1.5 border-b">異常天數</th>
+                                        <th class="px-4 py-3 border-b font-semibold">備註原因</th>
+                                        <th class="px-4 py-3 border-b font-semibold">客戶品號</th>
+                                        <th class="px-4 py-3 border-b font-semibold">異常站點</th>
+                                        <th class="px-4 py-3 border-b font-semibold">異常天數</th>
                                     </tr>
                                 </thead>
                                 <tbody id="abnormal-table-body" class="divide-y divide-gray-200">
@@ -1048,11 +1061,6 @@
                             </table>
                         </div>
                     </div>
-
-                    <div id="chart-view-3" class="w-full h-full hidden"><canvas id="chartCanvas_3"></canvas></div>
-                    <div id="chart-view-4" class="w-full h-full hidden"><canvas id="chartCanvas_4"></canvas></div>
-                    <div id="chart-view-5" class="w-full h-full hidden"><canvas id="chartCanvas_5"></canvas></div>
-                    <div id="chart-view-6" class="w-full h-full hidden"><canvas id="chartCanvas_6"></canvas></div>
                 </div>
             </div>
         </div>
