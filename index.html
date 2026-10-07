@@ -40,6 +40,24 @@
             "產品入庫日", "目標完成日", "備註", "是否有重工"
         ];
 
+        const allStations = [
+            { key: "PO下單日", name: "PO下單" },
+            { key: "圖面繪製完成日", name: "圖面繪製" },
+            { key: "BOM完成日", name: "BOM完成" },
+            { key: "多部門會簽完成日", name: "多部門會簽" },
+            { key: "材料到廠日", name: "材料到廠" },
+            { key: "製造開始加工日", name: "製造開始加工" },
+            { key: "製造完成加工日", name: "製造完成加工" },
+            { key: "其他(半品)等待開始日", name: "半品等待開始" },
+            { key: "其他(半品)完成日", name: "半品完成" },
+            { key: "委外完成日", name: "委外完成" },
+            { key: "品保開始檢驗日", name: "品保開始檢驗" },
+            { key: "品保完成檢驗日", name: "品保完成檢驗" },
+            { key: "異常返修完工日", name: "異常返修完工" },
+            { key: "異常返修檢驗完成日", name: "異常返修檢驗" },
+            { key: "產品入庫日", name: "產品入庫" }
+        ];
+
         const defaultRows = [
             { 
                 id: "row_1", 
@@ -67,6 +85,20 @@
         let currentChartTab = 1;
         let isInitialLoading = true;
         let draggedRowId = null;
+
+        // 取得繼承前一站點日期的完整站點資料
+        function getResolvedDates(rowData) {
+            let res = {};
+            let lastDate = null;
+            allStations.forEach(st => {
+                let val = rowData[st.key];
+                if (val && val.trim() !== "") {
+                    lastDate = val;
+                }
+                res[st.key] = lastDate;
+            });
+            return res;
+        }
 
         window.addEventListener('DOMContentLoaded', () => {
             const loginSection = document.getElementById('login-section');
@@ -411,7 +443,6 @@
                 activeCharts[tabNum].destroy();
             }
 
-            // 同步控制第二頁異常事件分析表格的顯示與隱藏
             const abnormalContainer = document.getElementById('abnormal-analysis-container');
             if (abnormalContainer) {
                 if (tabNum === 2) {
@@ -428,7 +459,8 @@
             if (tabNum === 1) {
                 const dateCounts = {};
                 tableData.forEach(row => {
-                    const d = row.data['產品入庫日'] || row.data['製造完成加工日'];
+                    const resolved = getResolvedDates(row.data);
+                    const d = resolved['產品入庫日'] || resolved['製造完成加工日'];
                     if (d) {
                         const dateKey = d.slice(0, 10);
                         dateCounts[dateKey] = (dateCounts[dateKey] || 0) + 1;
@@ -468,7 +500,7 @@
                                     }
                                     return '';
                                 },
-                                color: '#1e3a8a',
+                                color: '#000000',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
                             }
@@ -478,17 +510,15 @@
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 2) {
-                const stations = [
-                    "PO下單日", "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", 
-                    "製造開始加工日", "製造完成加工日", "品保完成檢驗日", "產品入庫日"
-                ];
-                const avgDaysPerStation = stations.map((st, sIdx) => {
+                // 圖表 2: 站點平均天數 (涵蓋全部 15 個站點，字體純黑，正上方對齊)
+                const avgDaysPerStation = allStations.map((st, sIdx) => {
                     if (sIdx === 0) return 0.0;
                     let totalDays = 0;
                     let count = 0;
                     tableData.forEach(row => {
-                        const po = row.data["PO下單日"];
-                        const stDate = row.data[st];
+                        const resolved = getResolvedDates(row.data);
+                        const po = resolved["PO下單日"];
+                        const stDate = resolved[st.key];
                         if (po && stDate) {
                             const diff = (new Date(stDate).getTime() - new Date(po).getTime()) / (1000 * 3600 * 24);
                             if (diff >= 0) {
@@ -499,10 +529,11 @@
                     });
                     return count > 0 ? parseFloat((totalDays / count).toFixed(1)) : 0.0;
                 });
+
                 activeCharts[2] = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: stations.map(s => s.replace('完成日', '').replace('日', '')),
+                        labels: allStations.map(s => s.name),
                         datasets: [{
                             label: '平均累積天數 (自 PO 下單起算)',
                             data: avgDaysPerStation,
@@ -517,18 +548,12 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 35, right: 40 } },
+                        layout: { padding: { top: 45, right: 30, left: 20 } },
                         plugins: {
                             title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (單位: 天)', font: { size: 16 } },
                             datalabels: {
-                                align: function(context) {
-                                    if (context.dataIndex === context.dataset.data.length - 1) return 'left';
-                                    return context.dataIndex % 2 === 0 ? 'top' : 'bottom';
-                                },
-                                anchor: function(context) {
-                                    if (context.dataIndex === context.dataset.data.length - 1) return 'start';
-                                    return 'center';
-                                },
+                                align: 'top',
+                                anchor: 'end',
                                 formatter: function(value, context) {
                                     const idx = context.dataIndex;
                                     const currentVal = value;
@@ -539,16 +564,16 @@
                                     } else {
                                         const prevVal = context.dataset.data[idx - 1];
                                         const diffInterval = parseFloat((currentVal - prevVal).toFixed(1));
-                                        let labelStr = `累:${currentVal.toFixed(1)}d (區段:+${diffInterval}d)`;
+                                        let labelStr = `累:${currentVal.toFixed(1)}d (+${diffInterval}d)`;
                                         if (idx === totalLen - 1) {
                                             labelStr = `${lastCustPN} | 累:${currentVal.toFixed(1)}d (+${diffInterval}d)`;
                                         }
                                         return labelStr;
                                     }
                                 },
-                                color: '#065f46',
+                                color: '#000000',
                                 font: { weight: 'bold', size: 11 },
-                                padding: 4
+                                padding: 6
                             }
                         },
                         scales: { 
@@ -559,40 +584,39 @@
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 3) {
-                const durationKeys = ["PO下單至圖面完成", "圖面完成至材料到廠", "材料到廠至開始加工", "製造加工耗時", "品保檢驗耗時", "總前置時間(PO到入庫)"];
-                const durations = { "PO下單至圖面完成": [], "圖面完成至材料到廠": [], "材料到廠至開始加工": [], "製造加工耗時": [], "品保檢驗耗時": [], "總前置時間(PO到入庫)": [] };
+                // 圖表 3: 流轉與加工瓶頸 (依序計算相鄰站點間隔，不含總前置時間，畫到最後一個站點)
+                const intervalKeys = [];
+                for (let i = 0; i < allStations.length - 1; i++) {
+                    intervalKeys.push({
+                        from: allStations[i].key,
+                        to: allStations[i+1].key,
+                        name: `${allStations[i].name} → ${allStations[i+1].name}`
+                    });
+                }
+
+                const durations = intervalKeys.map(() => []);
                 tableData.forEach(row => {
-                    const d_po = row.data["PO下單日"];
-                    const d_draw = row.data["圖面繪製完成日"];
-                    const d_mat = row.data["材料到廠日"];
-                    const d_start = row.data["製造開始加工日"];
-                    const d_end = row.data["製造完成加工日"];
-                    const d_qc = row.data["品保完成檢驗日"];
-                    const d_in = row.data["產品入庫日"];
-
-                    const diffDays = (s1, s2) => {
-                        if (!s1 || !s2) return null;
-                        const diff = (new Date(s2).getTime() - new Date(s1).getTime()) / (1000 * 3600 * 24);
-                        return diff >= 0 ? diff : null;
-                    };
-
-                    if (diffDays(d_po, d_draw) !== null) durations["PO下單至圖面完成"].push(diffDays(d_po, d_draw));
-                    if (diffDays(d_draw, d_mat) !== null) durations["圖面完成至材料到廠"].push(diffDays(d_draw, d_mat));
-                    if (diffDays(d_mat, d_start) !== null) durations["材料到廠至開始加工"].push(diffDays(d_mat, d_start));
-                    if (diffDays(d_start, d_end) !== null) durations["製造加工耗時"].push(diffDays(d_start, d_end));
-                    if (diffDays(d_end, d_qc) !== null) durations["品保檢驗耗時"].push(diffDays(d_end, d_qc));
-                    if (diffDays(d_po, d_in) !== null) durations["總前置時間(PO到入庫)"].push(diffDays(d_po, d_in));
+                    const resolved = getResolvedDates(row.data);
+                    intervalKeys.forEach((ik, ikIdx) => {
+                        const s1 = resolved[ik.from];
+                        const s2 = resolved[ik.to];
+                        if (s1 && s2) {
+                            const diff = (new Date(s2).getTime() - new Date(s1).getTime()) / (1000 * 3600 * 24);
+                            if (diff >= 0) durations[ikIdx].push(diff);
+                        }
+                    });
                 });
 
                 const avg = arr => arr.length ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : 0.0;
-                const avgData = durationKeys.map(k => avg(durations[k]));
+                const avgIntervalData = durations.map(arr => avg(arr));
+
                 activeCharts[3] = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: durationKeys,
+                        labels: intervalKeys.map(k => k.name),
                         datasets: [{
-                            label: '平均耗時 (天)',
-                            data: avgData,
+                            label: '區段平均耗時 (天)',
+                            data: avgIntervalData,
                             borderColor: 'rgba(217, 119, 6, 1)',
                             backgroundColor: 'rgba(217, 119, 6, 0.1)',
                             fill: true,
@@ -604,25 +628,25 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 35, right: 30 } },
+                        layout: { padding: { top: 45, right: 30, left: 20 } },
                         plugins: {
-                            title: { display: true, text: '各站點平均流轉與加工天數瓶頸折線分析 (單位: 天)', font: { size: 16 } },
+                            title: { display: true, text: '各相鄰站點平均流轉與加工天數瓶頸分析 (單位: 天)', font: { size: 16 } },
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
-                                formatter: function(value, context) {
-                                    if (context.dataIndex === context.dataset.data.length - 1) {
-                                        return `${lastCustPN} (${value.toFixed(1)}天)`;
-                                    }
+                                formatter: function(value) {
                                     return `${value.toFixed(1)}d`;
                                 },
-                                color: '#b45309',
-                                font: { weight: 'bold', size: 12 },
-                                padding: 4
+                                color: '#000000',
+                                font: { weight: 'bold', size: 11 },
+                                padding: 6
                             }
                         },
                         scales: { 
-                            x: { grace: '10%' },
+                            x: { 
+                                grace: '10%',
+                                ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 45 }
+                            },
                             y: { beginAtZero: true, title: { display: true, text: '天數 (Days)' } } 
                         }
                     },
@@ -658,8 +682,9 @@
                 tableData.forEach((row, idx) => {
                     const custPn = row.data["客戶品號"] || `項次 ${idx+1}`;
                     productLabels.push(custPn);
+                    const resolved = getResolvedDates(row.data);
                     const target = row.data["目標完成日"];
-                    const actual = row.data["產品入庫日"] || new Date().toISOString().slice(0, 10);
+                    const actual = resolved["產品入庫日"] || new Date().toISOString().slice(0, 10);
                     if (target) {
                         const diff = parseFloat(((new Date(actual).getTime() - new Date(target).getTime()) / (1000 * 3600 * 24)).toFixed(1));
                         scatterData.push({ x: idx + 1, y: diff, custName: custPn });
@@ -691,7 +716,7 @@
                                     }
                                     return `${value.custName}`;
                                 },
-                                color: '#1d4ed8',
+                                color: '#000000',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
                             }
@@ -718,8 +743,9 @@
                 tableData.forEach((row, idx) => {
                     const custPn = row.data["客戶品號"] || `項次 ${idx+1}`;
                     productLabels.push(custPn);
-                    const po = row.data["PO下單日"];
-                    const inDate = row.data["產品入庫日"];
+                    const resolved = getResolvedDates(row.data);
+                    const po = resolved["PO下單日"];
+                    const inDate = resolved["產品入庫日"];
                     if (po && inDate) {
                         const days = parseFloat(((new Date(inDate).getTime() - new Date(po).getTime()) / (1000 * 3600 * 24)).toFixed(1));
                         if (days >= 0) {
@@ -728,7 +754,10 @@
                     }
                 });
                 const currentMonthStr = new Date().toISOString().slice(0, 7);
-                const monthInCount = tableData.filter(row => row.data["產品入庫日"] && row.data["產品入庫日"].startsWith(currentMonthStr)).length;
+                const monthInCount = tableData.filter(row => {
+                    const resolved = getResolvedDates(row.data);
+                    return resolved["產品入庫日"] && resolved["產品入庫日"].startsWith(currentMonthStr);
+                }).length;
 
                 activeCharts[6] = new Chart(ctx, {
                     type: 'scatter',
@@ -756,7 +785,7 @@
                                     }
                                     return `${value.custName}`;
                                 },
-                                color: '#2563eb',
+                                color: '#000000',
                                 font: { weight: 'bold', size: 12 },
                                 padding: 4
                             }
@@ -780,7 +809,7 @@
             }
         }
 
-        // ================= 渲染第二頁異常表格：找出任一相鄰站點間隔天數最長的區段 =================
+        // ================= 異常事件分析表格 =================
         function renderAbnormalTable() {
             const tbody = document.getElementById('abnormal-table-body');
             if (!tbody) return;
@@ -788,29 +817,12 @@
             let html = '';
             let hasData = false;
 
-            const stations = [
-                { key: "PO下單日", name: "PO下單" },
-                { key: "圖面繪製完成日", name: "圖面繪製" },
-                { key: "BOM完成日", name: "BOM完成" },
-                { key: "多部門會簽完成日", name: "多部門會簽" },
-                { key: "材料到廠日", name: "材料到廠" },
-                { key: "製造開始加工日", name: "製造開始加工" },
-                { key: "製造完成加工日", name: "製造完成加工" },
-                { key: "其他(半品)等待開始日", name: "半品等待開始" },
-                { key: "其他(半品)完成日", name: "半品完成" },
-                { key: "委外完成日", name: "委外完成" },
-                { key: "品保開始檢驗日", name: "品保開始檢驗" },
-                { key: "品保完成檢驗日", name: "品保完成檢驗" },
-                { key: "異常返修完工日", name: "異常返修完工" },
-                { key: "異常返修檢驗完成日", name: "異常返修檢驗" },
-                { key: "產品入庫日", name: "產品入庫" }
-            ];
-
             tableData.forEach(row => {
                 const remark = row.data["備註"];
                 if (remark && remark.trim() !== "") {
                     hasData = true;
                     const custPn = row.data["客戶品號"] || "N/A";
+                    const resolved = getResolvedDates(row.data);
                     
                     let maxIntervalDays = 0;
                     let longestIntervalName = "PO下單 - 圖面繪製";
@@ -818,8 +830,8 @@
                     let prevDate = null;
                     let prevName = "";
 
-                    stations.forEach(st => {
-                        const dateStr = row.data[st.key];
+                    allStations.forEach(st => {
+                        const dateStr = resolved[st.key];
                         if (dateStr) {
                             const curDate = new Date(dateStr).getTime();
                             if (prevDate !== null) {
@@ -867,7 +879,8 @@
             if (tabNum === 1) {
                 const dateCounts = {};
                 tableData.forEach(row => {
-                    const d = row.data['產品入庫日'] || row.data['製造完成加工日'];
+                    const resolved = getResolvedDates(row.data);
+                    const d = resolved['產品入庫日'] || resolved['製造完成加工日'];
                     if (d) {
                         const dateKey = d.slice(0, 10);
                         dateCounts[dateKey] = (dateCounts[dateKey] || 0) + 1;
@@ -902,7 +915,7 @@
                                 align: 'top',
                                 anchor: 'end',
                                 formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${lastCustPN} (${val})` : '',
-                                color: '#1e3a8a',
+                                color: '#000000',
                                 font: { weight: 'bold', size: 18 }
                             },
                             legend: { labels: { color: '#374151', font: { size: 16 } } }
@@ -915,12 +928,12 @@
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 2) {
-                const stations = ["PO下單日", "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", "製造開始加工日", "製造完成加工日", "品保完成檢驗日", "產品入庫日"];
-                const avgDaysPerStation = stations.map((st, sIdx) => {
+                const avgDaysPerStation = allStations.map((st, sIdx) => {
                     if (sIdx === 0) return 0.0;
                     let totalDays = 0, count = 0;
                     tableData.forEach(row => {
-                        const po = row.data["PO下單日"], stDate = row.data[st];
+                        const resolved = getResolvedDates(row.data);
+                        const po = resolved["PO下單日"], stDate = resolved[st.key];
                         if (po && stDate) {
                             const diff = (new Date(stDate).getTime() - new Date(po).getTime()) / (1000 * 3600 * 24);
                             if (diff >= 0) { totalDays += diff; count++; }
@@ -931,7 +944,7 @@
                 return new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: stations.map(s => s.replace('完成日', '').replace('日', '')),
+                        labels: allStations.map(s => s.name),
                         datasets: [{
                             label: '平均累積天數 (自 PO 下單起算)',
                             data: avgDaysPerStation,
@@ -946,20 +959,20 @@
                     options: {
                         responsive: false,
                         animation: false,
-                        layout: { padding: { top: 45, right: 40 } },
+                        layout: { padding: { top: 50, right: 40, left: 20 } },
                         plugins: {
                             title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (單位: 天)', font: { size: 26 }, color: '#111827' },
                             datalabels: {
-                                align: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? 'left' : (ctx.dataIndex % 2 === 0 ? 'top' : 'bottom'),
-                                anchor: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? 'start' : 'center',
+                                align: 'top',
+                                anchor: 'end',
                                 formatter: (val, ctx) => {
                                     const idx = ctx.dataIndex;
                                     if (idx === 0) return `${val.toFixed(1)}d`;
                                     const prev = ctx.dataset.data[idx - 1];
                                     const diff = (val - prev).toFixed(1);
-                                    return idx === ctx.dataset.data.length - 1 ? `${lastCustPN} | 累:${val.toFixed(1)}d (+${diff}d)` : `累:${val.toFixed(1)}d (區段:+${diff}d)`;
+                                    return idx === ctx.dataset.data.length - 1 ? `${lastCustPN} | 累:${val.toFixed(1)}d (+${diff}d)` : `累:${val.toFixed(1)}d (+${diff}d)`;
                                 },
-                                color: '#065f46',
+                                color: '#000000',
                                 font: { weight: 'bold', size: 16 }
                             },
                             legend: { labels: { color: '#374151', font: { size: 16 } } }
@@ -972,26 +985,30 @@
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 3) {
-                const durationKeys = ["PO下單至圖面完成", "圖面完成至材料到廠", "材料到廠至開始加工", "製造加工耗時", "品保檢驗耗時", "總前置時間(PO到入庫)"];
-                const durations = { "PO下單至圖面完成": [], "圖面完成至材料到廠": [], "材料到廠至開始加工": [], "製造加工耗時": [], "品保檢驗耗時": [], "總前置時間(PO到入庫)": [] };
+                const intervalKeys = [];
+                for (let i = 0; i < allStations.length - 1; i++) {
+                    intervalKeys.push({ from: allStations[i].key, to: allStations[i+1].key, name: `${allStations[i].name} → ${allStations[i+1].name}` });
+                }
+                const durations = intervalKeys.map(() => []);
                 tableData.forEach(row => {
-                    const d_po = row.data["PO下單日"], d_draw = row.data["圖面繪製完成日"], d_mat = row.data["材料到廠日"], d_start = row.data["製造開始加工日"], d_end = row.data["製造完成加工日"], d_qc = row.data["品保完成檢驗日"], d_in = row.data["產品入庫日"];
-                    const diffDays = (s1, s2) => (!s1 || !s2) ? null : ((new Date(s2).getTime() - new Date(s1).getTime()) / (1000 * 3600 * 24));
-                    if (diffDays(d_po, d_draw) !== null) durations["PO下單至圖面完成"].push(diffDays(d_po, d_draw));
-                    if (diffDays(d_draw, d_mat) !== null) durations["圖面完成至材料到廠"].push(diffDays(d_draw, d_mat));
-                    if (diffDays(d_mat, d_start) !== null) durations["材料到廠至開始加工"].push(diffDays(d_mat, d_start));
-                    if (diffDays(d_start, d_end) !== null) durations["製造加工耗時"].push(diffDays(d_start, d_end));
-                    if (diffDays(d_end, d_qc) !== null) durations["品保檢驗耗時"].push(diffDays(d_end, d_qc));
-                    if (diffDays(d_po, d_in) !== null) durations["總前置時間(PO到入庫)"].push(diffDays(d_po, d_in));
+                    const resolved = getResolvedDates(row.data);
+                    intervalKeys.forEach((ik, ikIdx) => {
+                        const s1 = resolved[ik.from], s2 = resolved[ik.to];
+                        if (s1 && s2) {
+                            const diff = (new Date(s2).getTime() - new Date(s1).getTime()) / (1000 * 3600 * 24);
+                            if (diff >= 0) durations[ikIdx].push(diff);
+                        }
+                    });
                 });
                 const avg = arr => arr.length ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : 0.0;
-                const avgData = durationKeys.map(k => avg(durations[k]));
+                const avgData = intervalKeys.map((_, idx) => avg(durations[idx]));
+
                 return new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: durationKeys,
+                        labels: intervalKeys.map(k => k.name),
                         datasets: [{
-                            label: '平均耗時 (天)',
+                            label: '區段平均耗時 (天)',
                             data: avgData,
                             borderColor: 'rgba(217, 119, 6, 1)',
                             backgroundColor: 'rgba(217, 119, 6, 0.1)',
@@ -1004,20 +1021,20 @@
                     options: {
                         responsive: false,
                         animation: false,
-                        layout: { padding: { top: 45, right: 40 } },
+                        layout: { padding: { top: 50, right: 40, left: 20 } },
                         plugins: {
-                            title: { display: true, text: '各站點平均流轉與加工天數瓶頸折線分析 (單位: 天)', font: { size: 26 }, color: '#111827' },
+                            title: { display: true, text: '各相鄰站點平均流轉與加工天數瓶頸分析 (單位: 天)', font: { size: 26 }, color: '#111827' },
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
-                                formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${lastCustPN} (${val.toFixed(1)}天)` : `${val.toFixed(1)}d`,
-                                color: '#b45309',
+                                formatter: (val) => `${val.toFixed(1)}d`,
+                                color: '#000000',
                                 font: { weight: 'bold', size: 16 }
                             },
                             legend: { labels: { color: '#374151', font: { size: 16 } } }
                         },
                         scales: {
-                            x: { grace: '10%', ticks: { color: '#374151', font: { size: 14 } } },
+                            x: { grace: '10%', ticks: { color: '#374151', font: { size: 12 }, maxRotation: 45, minRotation: 45 } },
                             y: { beginAtZero: true, ticks: { color: '#374151', font: { size: 14 } } }
                         }
                     },
@@ -1053,7 +1070,8 @@
                 tableData.forEach((row, idx) => {
                     const custPn = row.data["客戶品號"] || `項次 ${idx+1}`;
                     productLabels.push(custPn);
-                    const target = row.data["目標完成日"], actual = row.data["產品入庫日"] || new Date().toISOString().slice(0, 10);
+                    const resolved = getResolvedDates(row.data);
+                    const target = row.data["目標完成日"], actual = resolved["產品入庫日"] || new Date().toISOString().slice(0, 10);
                     if (target) {
                         const diff = parseFloat(((new Date(actual).getTime() - new Date(target).getTime()) / (1000 * 3600 * 24)).toFixed(1));
                         scatterData.push({ x: idx + 1, y: diff, custName: custPn });
@@ -1072,14 +1090,14 @@
                     options: {
                         responsive: false,
                         animation: false,
-                        layout: { padding: { top: 45, right: 40 } },
+                        layout: { padding: { top: 50, right: 40 } },
                         plugins: {
                             title: { display: true, text: '各專案目標完成日 vs 實際入庫日 GAP 散布圖', font: { size: 26 }, color: '#111827' },
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
                                 formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${val.custName} (${val.y > 0 ? '+' + val.y : val.y}天)` : `${val.custName}`,
-                                color: '#1d4ed8',
+                                color: '#000000',
                                 font: { weight: 'bold', size: 16 }
                             },
                             legend: { labels: { color: '#374151', font: { size: 16 } } }
@@ -1104,7 +1122,8 @@
                 tableData.forEach((row, idx) => {
                     const custPn = row.data["客戶品號"] || `項次 ${idx+1}`;
                     productLabels.push(custPn);
-                    const po = row.data["PO下單日"], inDate = row.data["產品入庫日"];
+                    const resolved = getResolvedDates(row.data);
+                    const po = resolved["PO下單日"], inDate = resolved["產品入庫日"];
                     if (po && inDate) {
                         const days = parseFloat(((new Date(inDate).getTime() - new Date(po).getTime()) / (1000 * 3600 * 24)).toFixed(1));
                         if (days >= 0) scatterData.push({ x: idx + 1, y: days, custName: custPn });
@@ -1123,14 +1142,14 @@
                     options: {
                         responsive: false,
                         animation: false,
-                        layout: { padding: { top: 45, right: 40 } },
+                        layout: { padding: { top: 50, right: 40 } },
                         plugins: {
                             title: { display: true, text: `全產品一覽：PO 到入庫總天數散布圖`, font: { size: 26 }, color: '#111827' },
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
                                 formatter: (val, ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? `${val.custName} (${val.y}天)` : `${val.custName}`,
-                                color: '#2563eb',
+                                color: '#000000',
                                 font: { weight: 'bold', size: 16 }
                             },
                             legend: { labels: { color: '#374151', font: { size: 16 } } }
@@ -1190,23 +1209,23 @@
 
                 const dummyChart = createDummyChartForExport(i, tempCtx);
                 
-                // 改用同步繪製與取圖，避免非同步 Promise 阻塞
-                const dataUrl = tempCanvas.toDataURL('image/png');
                 await new Promise((resolve) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const cIdx = (i - 1) % cols;
-                        const rIdx = Math.floor((i - 1) / cols);
-                        const drawX = marginX + cIdx * (panelWidth + spacingX);
-                        const drawY = marginY + 60 + rIdx * (panelHeight + spacingY);
+                    setTimeout(() => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const cIdx = (i - 1) % cols;
+                            const rIdx = Math.floor((i - 1) / cols);
+                            const drawX = marginX + cIdx * (panelWidth + spacingX);
+                            const drawY = marginY + 60 + rIdx * (panelHeight + spacingY);
 
-                        ctx.strokeStyle = '#e5e7eb';
-                        ctx.lineWidth = 4;
-                        ctx.strokeRect(drawX, drawY, panelWidth, panelHeight);
-                        ctx.drawImage(img, drawX, drawY, panelWidth, panelHeight);
-                        resolve();
-                    };
-                    img.src = dataUrl;
+                            ctx.strokeStyle = '#e5e7eb';
+                            ctx.lineWidth = 4;
+                            ctx.strokeRect(drawX, drawY, panelWidth, panelHeight);
+                            ctx.drawImage(img, drawX, drawY, panelWidth, panelHeight);
+                            resolve();
+                        };
+                        img.src = tempCanvas.toDataURL('image/png');
+                    }, 50);
                 });
 
                 dummyChart.destroy();
