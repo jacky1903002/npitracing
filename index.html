@@ -170,6 +170,7 @@
             
             let headerHtml = `<th class="px-3 py-2 bg-gray-100 text-center text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-0 z-30 w-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">燈號</th>`;
             headerHtml += `<th class="px-3 py-2 bg-gray-100 text-center text-xs font-medium text-gray-600 uppercase tracking-wider sticky left-20 z-30 w-16 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">操作</th>`;
+            
             columns.forEach((col, idx) => {
                 const isRemark = (col === "備註");
                 const colTitleAttr = isRemark ? "點擊修改備註欄位名稱" : "此欄位名稱已鎖定";
@@ -178,13 +179,15 @@
                 if (idx === 0) {
                     stickyClass = "sticky left-[136px] z-30 bg-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
                 } else if (idx === 1) {
-                    stickyClass = "sticky left-[296px] z-30 bg-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
+                    stickyClass = "sticky left-[246px] z-30 bg-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
                 } else if (idx === 2) {
-                    stickyClass = "sticky left-[456px] z-30 bg-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
+                    stickyClass = "sticky left-[356px] z-30 bg-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
                 }
 
+                let minWidthStyle = (idx === 0 || idx === 1 || idx === 2) ? "min-w-[110px]" : "min-w-[140px]";
+
                 headerHtml += `
-                    <th class="px-3 py-2 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider min-w-[150px] select-none ${stickyClass}">
+                    <th class="px-3 py-2 bg-gray-100 text-left text-xs font-medium text-gray-600 uppercase tracking-wider ${minWidthStyle} select-none ${stickyClass}">
                         <div class="flex items-center justify-between">
                             <span ${isRemark ? `onclick="renameColumn(${idx})" class="cursor-pointer hover:text-blue-600 truncate"` : `class="truncate text-gray-700"`} title="${colTitleAttr}">
                                 ${isRemark ? '<i class="fa-solid fa-pen mr-1 text-blue-500"></i>' : ''}${col}
@@ -240,9 +243,9 @@
                     if (idx === 0) {
                         stickyCellClass = "sticky left-[136px] z-30 bg-white border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
                     } else if (idx === 1) {
-                        stickyCellClass = "sticky left-[296px] z-30 bg-white border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
+                        stickyCellClass = "sticky left-[246px] z-30 bg-white border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
                     } else if (idx === 2) {
-                        stickyCellClass = "sticky left-[456px] z-30 bg-white border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
+                        stickyCellClass = "sticky left-[356px] z-30 bg-white border-b shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]";
                     } else {
                         stickyCellClass = "border-b";
                     }
@@ -374,7 +377,7 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // ================= 綜合圖表分析系統 (已移除第7個圖表) =================
+        // ================= 綜合圖表分析系統 =================
         window.openChartModal = function() {
             const modal = document.getElementById('chart-modal');
             modal.classList.remove('hidden');
@@ -406,6 +409,17 @@
             const ctx = document.getElementById(canvasId).getContext('2d');
             if (activeCharts[tabNum]) {
                 activeCharts[tabNum].destroy();
+            }
+
+            // 同步控制第二頁異常事件分析表格的顯示與隱藏
+            const abnormalContainer = document.getElementById('abnormal-analysis-container');
+            if (abnormalContainer) {
+                if (tabNum === 2) {
+                    abnormalContainer.classList.remove('hidden');
+                    renderAbnormalTable();
+                } else {
+                    abnormalContainer.classList.add('hidden');
+                }
             }
 
             const lastRow = tableData[tableData.length - 1];
@@ -766,13 +780,61 @@
             }
         }
 
-        // ================= 匯出高畫質報表 (6合1字體大幅放大) =================
+        // ================= 渲染第二頁的異常事件分析表格 =================
+        function renderAbnormalTable() {
+            const tbody = document.getElementById('abnormal-table-body');
+            if (!tbody) return;
+
+            let html = '';
+            let hasData = false;
+
+            tableData.forEach(row => {
+                const remark = row.data["備註"];
+                if (remark && remark.trim() !== "") {
+                    hasData = true;
+                    const custPn = row.data["客戶品號"] || "N/A";
+                    
+                    let abnormalStation = "備註說明";
+                    let abnormalDays = 0;
+                    
+                    const d_po = row.data["PO下單日"];
+                    const d_qcEnd = row.data["品保完成檢驗日"] || row.data["品保開始檢驗日"];
+
+                    if (row.data["異常返修完工日"] && d_po) {
+                        abnormalStation = "異常返修站";
+                        const startRef = row.data["品保開始檢驗日"] || d_po;
+                        abnormalDays = Math.max(0, Math.round((new Date(row.data["異常返修完工日"]).getTime() - new Date(startRef).getTime()) / (1000 * 3600 * 24)));
+                    } else {
+                        abnormalStation = "製造/品保站";
+                        if (d_po && d_qcEnd) {
+                            abnormalDays = Math.max(0, Math.round((new Date(d_qcEnd).getTime() - new Date(d_po).getTime()) / (1000 * 3600 * 24)));
+                        }
+                    }
+
+                    html += `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2 border-b font-medium text-gray-800">${remark}</td>
+                            <td class="px-3 py-2 border-b text-gray-600">${custPn}</td>
+                            <td class="px-3 py-2 border-b text-gray-600">${abnormalStation}</td>
+                            <td class="px-3 py-2 border-b text-red-600 font-bold">${abnormalDays} 天</td>
+                        </tr>
+                    `;
+                }
+            });
+
+            if (!hasData) {
+                html = `<tr><td colspan="4" class="px-3 py-4 text-center text-gray-400">目前尚無備註或異常事件紀錄</td></tr>`;
+            }
+            tbody.innerHTML = html;
+        }
+
+        // ================= 匯出高畫質報表 =================
         window.exportAllChartsPNG = function() {
             showToast("請使用 6 合 1 總結報表匯出功能以取得最佳高畫質圖表！");
         }
 
         window.exportAbnormalChartPNG = function() {
-            showToast("異常分析項目已整合至其他圖表中！");
+            showToast("異常分析項目已整合至第二頁圖表中！");
         }
 
         function createDummyChartForExport(tabNum, ctx) {
@@ -1224,13 +1286,14 @@
                 <div class="overflow-auto flex-1 max-h-[calc(100vh-170px)] relative">
                     <table class="w-full border-collapse text-left text-xs">
                         <thead id="table-header" class="sticky top-0 z-30 bg-gray-100"></thead>
-                        <tbody id="table-body" class="divide-y divide-gray-200"></tbody>
+                        <tbody id="type-body" class="divide-y divide-gray-200"></tbody>
                     </table>
                 </div>
             </div>
         </main>
     </div>
 
+    <!-- 綜合圖表分析 Modal -->
     <div id="chart-modal" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
             <div class="bg-gray-900 px-6 py-3 flex items-center justify-between border-b border-gray-800 flex-wrap gap-2">
@@ -1252,10 +1315,33 @@
                 </div>
             </div>
 
-            <div class="flex-1 p-6 flex items-center justify-center bg-gray-50">
-                <div class="w-full h-full max-w-6xl bg-white p-6 rounded-2xl shadow-xl relative flex items-center justify-center">
+            <div class="flex-1 p-6 flex flex-col items-center justify-center bg-gray-50 overflow-y-auto">
+                <div class="w-full h-full max-w-6xl bg-white p-6 rounded-2xl shadow-xl relative flex flex-col items-center justify-center">
                     <div id="chart-view-1" class="w-full h-full"><canvas id="chartCanvas_1"></canvas></div>
-                    <div id="chart-view-2" class="w-full h-full hidden"><canvas id="chartCanvas_2"></canvas></div>
+                    
+                    <!-- 第二頁圖表與新增的異常事件分析表格 -->
+                    <div id="chart-view-2" class="w-full h-full hidden flex flex-col">
+                        <div class="w-full h-[60%]"><canvas id="chartCanvas_2"></canvas></div>
+                        <div id="abnormal-analysis-container" class="w-full h-[40%] mt-3 border-t pt-3 overflow-y-auto">
+                            <h3 class="text-xs font-bold text-gray-700 mb-2 flex items-center">
+                                <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1.5"></i> 備註異常事件分析列表
+                            </h3>
+                            <table class="w-full border-collapse text-left text-xs">
+                                <thead class="bg-gray-100 text-gray-600">
+                                    <tr>
+                                        <th class="px-3 py-1.5 border-b">備註原因</th>
+                                        <th class="px-3 py-1.5 border-b">客戶品號</th>
+                                        <th class="px-3 py-1.5 border-b">異常站點</th>
+                                        <th class="px-3 py-1.5 border-b">異常天數</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="abnormal-table-body" class="divide-y divide-gray-200">
+                                    <!-- 動態填入 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <div id="chart-view-3" class="w-full h-full hidden"><canvas id="chartCanvas_3"></canvas></div>
                     <div id="chart-view-4" class="w-full h-full hidden"><canvas id="chartCanvas_4"></canvas></div>
                     <div id="chart-view-5" class="w-full h-full hidden"><canvas id="chartCanvas_5"></canvas></div>
