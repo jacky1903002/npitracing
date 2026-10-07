@@ -89,7 +89,7 @@
                     document.getElementById('user-email').innerText = user.email;
                     loadDataFromCloud();
                 } else {
-                    loginSection.classList.add('hidden');
+                    loginSection.classList.remove('hidden');
                     appSection.classList.add('hidden');
                 }
             });
@@ -115,7 +115,7 @@
             document.getElementById('import-excel-input').addEventListener('change', importFromExcel);
             document.getElementById('analyze-btn').addEventListener('click', openChartModal);
             document.getElementById('export-charts-btn').addEventListener('click', exportAllChartsPNG);
-            document.getElementById('export-combined-btn').addEventListener('click', exportCombined6in1PNG);
+            document.getElementById('export-combined-btn').addEventListener('click', exportCombinedAllPNG);
 
             const connectedRef = ref(db, '.info/connected');
             onValue(connectedRef, (snap) => {
@@ -391,7 +391,7 @@
 
         window.switchChartTab = function(tabNum) {
             currentChartTab = tabNum;
-            for (let i = 1; i <= 6; i++) {
+            for (let i = 1; i <= 7; i++) {
                 const btn = document.getElementById(`tab-btn-${i}`);
                 const view = document.getElementById(`chart-view-${i}`);
                 if (i === tabNum) {
@@ -412,7 +412,6 @@
                 activeCharts[tabNum].destroy();
             }
 
-            // 取得最後一筆資料的客戶品號 (用於氣球標籤)
             const lastRow = tableData[tableData.length - 1];
             const lastCustPN = lastRow ? (lastRow.data["客戶品號"] || "最新項目") : "";
 
@@ -475,14 +474,13 @@
                 });
 
             } else if (tabNum === 2) {
-                // 圖表 2：各站完成日分析 (起點0從PO下單日算起, 數值取到小數點第一位, 最後一個點帶客戶品號氣球)
                 const stations = [
                     "PO下單日", "圖面繪製完成日", "BOM完成日", "多部門會簽完成日", "材料到廠日", 
                     "製造開始加工日", "製造完成加工日", "品保完成檢驗日", "產品入庫日"
                 ];
                 
                 const avgDaysPerStation = stations.map((st, sIdx) => {
-                    if (sIdx === 0) return 0.0; // PO下單日自身為0
+                    if (sIdx === 0) return 0.0;
                     let totalDays = 0;
                     let count = 0;
                     tableData.forEach(row => {
@@ -543,7 +541,6 @@
                 });
 
             } else if (tabNum === 3) {
-                // 圖表 3：各站時間瓶頸 (改為折線圖, 數值取到小數第一位, 最後一個點帶氣球)
                 const durationKeys = ["PO下單至圖面完成", "圖面完成至材料到廠", "材料到廠至開始加工", "製造加工耗時", "品保檢驗耗時", "總前置時間(PO到入庫)"];
                 const durations = { "PO下單至圖面完成": [], "圖面完成至材料到廠": [], "材料到廠至開始加工": [], "製造加工耗時": [], "品保檢驗耗時": [], "總前置時間(PO到入庫)": [] };
 
@@ -643,7 +640,6 @@
                 });
 
             } else if (tabNum === 5) {
-                // 圖表 5：客戶品號對 GAP 天數的散布圖 (最後一個點帶氣球)
                 const scatterData = [];
                 const productLabels = [];
 
@@ -719,7 +715,6 @@
                 });
 
             } else if (tabNum === 6) {
-                // 圖表 6：全產品 PO 至入庫天數散布圖 (最後一個點帶氣球)
                 const scatterData = [];
                 const productLabels = [];
 
@@ -799,12 +794,77 @@
                     },
                     plugins: [ChartDataLabels]
                 });
+
+            } else if (tabNum === 7) {
+                // 圖表 7：異常分析報表 (分析備註事件與對應異常天數)
+                const remarkMap = {};
+                tableData.forEach(row => {
+                    const remark = (row.data["備註"] || "").trim();
+                    if (remark !== "") {
+                        const target = row.data["目標完成日"];
+                        const actual = row.data["產品入庫日"] || new Date().toISOString().slice(0, 10);
+                        let delayDays = 0.0;
+                        if (target) {
+                            const diff = (new Date(actual).getTime() - new Date(new Date(target).toDateString()).getTime()) / (1000 * 3600 * 24);
+                            if (diff > 0) delayDays = parseFloat(diff.toFixed(1));
+                        }
+                        if (!remarkMap[remark]) {
+                            remarkMap[remark] = { totalDelay: 0, count: 0, custName: row.data["客戶品號"] || "項目" };
+                        }
+                        remarkMap[remark].totalDelay += delayDays;
+                        remarkMap[remark].count += 1;
+                        remarkMap[remark].custName = row.data["客戶品號"] || remarkMap[remark].custName;
+                    }
+                });
+
+                const remarks = Object.keys(remarkMap);
+                const avgDelays = remarks.map(r => parseFloat((remarkMap[r].totalDelay / remarkMap[r].count).toFixed(1)));
+
+                activeCharts[7] = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: remarks.length > 0 ? remarks : ['無備註異常記錄'],
+                        datasets: [{
+                            label: '平均異常/延遲天數 (天)',
+                            data: remarks.length > 0 ? avgDelays : [0],
+                            backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                            borderColor: 'rgba(239, 68, 68, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: true, text: '備註事件與對應異常延遲天數分析報表', font: { size: 16 } },
+                            datalabels: {
+                                align: 'top',
+                                anchor: 'end',
+                                formatter: function(value, context) {
+                                    if (context.dataIndex === context.dataset.data.length - 1 && remarks.length > 0) {
+                                        return `${remarkMap[remarks[context.dataIndex]].custName} (${value}天)`;
+                                    }
+                                    return '';
+                                },
+                                backgroundColor: '#1e293b',
+                                borderColor: '#ef4444',
+                                borderWidth: 1,
+                                borderRadius: 6,
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 11 },
+                                padding: 6
+                            }
+                        },
+                        scales: { y: { beginAtZero: true, title: { display: true, text: '平均延遲天數 (Days)' } } }
+                    },
+                    plugins: [ChartDataLabels]
+                });
             }
         }
 
         // 一鍵匯出所有圖表獨立 PNG
         window.exportAllChartsPNG = function() {
-            for (let i = 1; i <= 6; i++) {
+            for (let i = 1; i <= 7; i++) {
                 const canvas = document.getElementById(`chartCanvas_${i}`);
                 if (canvas) {
                     if (!activeCharts[i]) {
@@ -823,12 +883,12 @@
             showToast("已成功匯出所有獨立圖表 PNG！");
         }
 
-        // 一鍵匯出 6 合一圖表 (PNG)
-        window.exportCombined6in1PNG = async function() {
+        // 一鍵匯出 7 合一總結圖表 (PNG)
+        window.exportCombinedAllPNG = async function() {
             const originalTab = currentChartTab;
             const tempCanvases = [];
 
-            for (let i = 1; i <= 6; i++) {
+            for (let i = 1; i <= 7; i++) {
                 switchChartTab(i);
                 await new Promise(resolve => setTimeout(resolve, 150));
                 const canvas = document.getElementById(`chartCanvas_${i}`);
@@ -840,7 +900,7 @@
 
             const combinedCanvas = document.createElement('canvas');
             const targetWidth = 2400;
-            const targetHeight = 1800;
+            const targetHeight = 2400;
             combinedCanvas.width = targetWidth;
             combinedCanvas.height = targetHeight;
             const ctx = combinedCanvas.getContext('2d');
@@ -851,10 +911,10 @@
             ctx.fillStyle = '#111827';
             ctx.font = 'bold 42px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('工廠新品開發綜合圖表分析報表 (6合一總結)', targetWidth / 2, 70);
+            ctx.fillText('工廠新品開發綜合圖表分析報表 (7合一總結)', targetWidth / 2, 70);
 
             const cols = 2;
-            const rows = 3;
+            const rows = 4;
             const marginX = 80;
             const marginY = 120;
             const spacingX = 60;
@@ -889,11 +949,11 @@
                         const combinedURL = combinedCanvas.toDataURL('image/png');
                         const link = document.createElement('a');
                         link.href = combinedURL;
-                        link.download = `工廠新品追蹤_6合一綜合分析圖表_${new Date().toISOString().slice(0,10)}.png`;
+                        link.download = `工廠新品追蹤_7合一綜合分析圖表_${new Date().toISOString().slice(0,10)}.png`;
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
-                        showToast("已成功匯出 6 合一綜合圖表 PNG！");
+                        showToast("已成功匯出 7 合一綜合圖表 PNG！");
                     }
                 };
             });
@@ -1010,11 +1070,12 @@
                 <button id="tab-btn-3" onclick="switchChartTab(3)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">3. 各站時間瓶頸</button>
                 <button id="tab-btn-4" onclick="switchChartTab(4)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">4. 一次通過率</button>
                 <button id="tab-btn-5" onclick="switchChartTab(5)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">5. 客戶品號 GAP 散布</button>
-                <button id="tab-btn-6" onclick="switchChartTab(6)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">6. 全產品 PO 至入庫天數</button>
+                <button id="tab-btn-6" onclick="switchChartTab(6)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">6. 全產品 PO 至入庫</button>
+                <button id="tab-btn-7" onclick="switchChartTab(7)" class="px-3 py-1.5 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-lg text-xs font-medium transition whitespace-nowrap">7. 異常分析報表</button>
             </div>
             <div class="flex items-center space-x-3">
-                <button id="export-combined-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap" title="將全部 6 個圖表自動合併為一張高畫質總結大圖下載">
-                    <i class="fa-solid fa-file-image mr-1.5"></i> 📊 匯出 6 合一圖表 (PNG)
+                <button id="export-combined-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap" title="將全部 7 個圖表自動合併為一張高畫質總結大圖下載">
+                    <i class="fa-solid fa-file-image mr-1.5"></i> 📊 匯出 7 合一圖表 (PNG)
                 </button>
                 <button id="export-charts-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center whitespace-nowrap">
                     <i class="fa-solid fa-download mr-1.5"></i> 匯出獨立圖表
@@ -1030,6 +1091,7 @@
                 <div id="chart-view-4" class="w-full h-full hidden"><canvas id="chartCanvas_4"></canvas></div>
                 <div id="chart-view-5" class="w-full h-full hidden"><canvas id="chartCanvas_5"></canvas></div>
                 <div id="chart-view-6" class="w-full h-full hidden"><canvas id="chartCanvas_6"></canvas></div>
+                <div id="chart-view-7" class="w-full h-full hidden"><canvas id="chartCanvas_7"></canvas></div>
             </div>
         </div>
     </div>
