@@ -785,38 +785,38 @@
                     productLabels.push(custPn);
                     const resolved = getResolvedDates(row.data);
                     const po = resolved["PO下單日"];
-                    const inDate = resolved["產品入庫日"];
+                    const inDate = row.data["產品入庫日"]; // 檢查是否有填入庫日
                     const targetDateStr = row.data["目標完成日"];
 
-                    if (po && inDate) {
+                    if (po && inDate && inDate.trim() !== "") {
                         const days = parseFloat(((new Date(inDate).getTime() - new Date(po).getTime()) / (1000 * 3600 * 24)).toFixed(1));
                         if (days >= 0) {
                             scatterData.push({ x: idx + 1, y: days, custName: custPn });
 
-                            // 根據「產品入庫日」與「目標完成日」判斷顏色
-                            if (targetDateStr && inDate) {
+                            // 根據「產品入庫日」與「目標完成日」判斷顏色 (<=0天: 綠色, 1~15天: 黃色, >15天: 紅色)
+                            if (targetDateStr && targetDateStr.trim() !== "") {
                                 const targetTime = new Date(targetDateStr).getTime();
                                 const actualTime = new Date(inDate).getTime();
                                 const diffDays = (actualTime - targetTime) / (1000 * 3600 * 24);
 
                                 if (diffDays <= 0) {
-                                    pointColors.push('#10b981'); // 綠色 (入庫日 <= 目標完成日)
+                                    pointColors.push('#10b981'); // 綠燈
                                 } else if (diffDays <= 15) {
-                                    pointColors.push('#f59e0b'); // 黃色 (落後 1~15 天)
+                                    pointColors.push('#f59e0b'); // 黃燈
                                 } else {
-                                    pointColors.push('#ef4444'); // 紅色 (落後 > 15 天)
+                                    pointColors.push('#ef4444'); // 紅燈
                                 }
                             } else {
-                                pointColors.push('#3b82f6'); // 預設藍色 (若未填目標完成日)
+                                pointColors.push('#3b82f6'); // 預設藍色
                             }
                         }
                     }
                 });
 
-                const currentMonthStr = new Date().toISOString().slice(0, 7);
-                const monthInCount = activeTableData.filter(row => {
-                    const resolved = getResolvedDates(row.data);
-                    return resolved["產品入庫日"] && resolved["產品入庫日"].startsWith(currentMonthStr);
+                // 計算有填入庫日的總件數 N (只要有填入庫日則計入，例如一個產品有填則 N=1)
+                const totalInCount = activeTableData.filter(row => {
+                    const inDateVal = row.data["產品入庫日"];
+                    return inDateVal && inDateVal.trim() !== "";
                 }).length;
 
                 activeCharts[6] = new Chart(ctx, {
@@ -835,7 +835,7 @@
                         maintainAspectRatio: false,
                         layout: { padding: { top: 50, right: 40 } },
                         plugins: {
-                            title: { display: true, text: `全產品一覽：PO 到入庫總天數散布圖 (本月入庫數: ${monthInCount} 件)`, font: { size: 18, weight: 'bold' } },
+                            title: { display: true, text: `全產品一欄:PO到入庫總天數散布圖,(入庫${totalInCount}件)`, font: { size: 18, weight: 'bold' } },
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
