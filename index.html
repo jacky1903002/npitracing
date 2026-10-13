@@ -472,8 +472,6 @@
             }
 
             const activeTableData = tableData.filter(r => !r.isHidden);
-            const lastRow = activeTableData[activeTableData.length - 1];
-            const lastCustPN = lastRow ? (lastRow.data["客戶品號"] || "最新項目") : "";
 
             if (tabNum === 1) {
                 const dateCounts = {};
@@ -510,19 +508,7 @@
                         maintainAspectRatio: false,
                         plugins: {
                             title: { display: true, text: '新品開發累積完成首件件數趨勢圖 (已排除隱藏項目)', font: { size: 18, weight: 'bold' } },
-                            datalabels: {
-                                align: 'top',
-                                anchor: 'end',
-                                formatter: function(value, context) {
-                                    if (context.dataIndex === context.dataset.data.length - 1) {
-                                        return `${lastCustPN} (${value})`;
-                                    }
-                                    return '';
-                                },
-                                color: '#000000',
-                                font: { weight: 'bold', size: 14 },
-                                padding: 6
-                            }
+                            datalabels: { display: false }
                         },
                         scales: { 
                             x: { ticks: { font: { size: 13 } } },
@@ -572,34 +558,7 @@
                         layout: { padding: { top: 70, bottom: 30, right: 40, left: 20 } },
                         plugins: {
                             title: { display: true, text: '各站點平均累積天數與區段間隔天數分析圖 (已排除隱藏項目)', font: { size: 18, weight: 'bold' } },
-                            datalabels: {
-                                align: function(context) {
-                                    return context.dataIndex % 2 === 0 ? 'top' : 'bottom';
-                                },
-                                anchor: function(context) {
-                                    return context.dataIndex % 2 === 0 ? 'end' : 'start';
-                                },
-                                formatter: function(value, context) {
-                                    const idx = context.dataIndex;
-                                    const currentVal = value;
-                                    const totalLen = context.dataset.data.length;
-
-                                    if (idx === 0) {
-                                        return `${currentVal.toFixed(1)}d`;
-                                    } else {
-                                        const prevVal = context.dataset.data[idx - 1];
-                                        const diffInterval = parseFloat((currentVal - prevVal).toFixed(1));
-                                        let labelStr = `累:${currentVal.toFixed(1)}d (+${diffInterval}d)`;
-                                        if (idx === totalLen - 1) {
-                                            labelStr = `${lastCustPN} | 累:${currentVal.toFixed(1)}d (+${diffInterval}d)`;
-                                        }
-                                        return labelStr;
-                                    }
-                                },
-                                color: '#000000',
-                                font: { weight: 'bold', size: 12 },
-                                padding: 6
-                            }
+                            datalabels: { display: false }
                         },
                         scales: { 
                             x: { 
@@ -658,20 +617,7 @@
                         layout: { padding: { top: 70, bottom: 30, right: 40, left: 20 } },
                         plugins: {
                             title: { display: true, text: '各相鄰站點平均流轉與加工天數瓶頸分析 (已排除隱藏項目)', font: { size: 18, weight: 'bold' } },
-                            datalabels: {
-                                align: function(context) {
-                                    return context.dataIndex % 2 === 0 ? 'top' : 'bottom';
-                                },
-                                anchor: function(context) {
-                                    return context.dataIndex % 2 === 0 ? 'end' : 'start';
-                                },
-                                formatter: function(value) {
-                                    return `${value.toFixed(1)}d`;
-                                },
-                                color: '#000000',
-                                font: { weight: 'bold', size: 12 },
-                                padding: 6
-                            }
+                            datalabels: { display: false }
                         },
                         scales: { 
                             x: { 
@@ -711,6 +657,7 @@
                     }
                 });
             } else if (tabNum === 5) {
+                // 圖表 5：客戶品號 GAP 散布圖（只顯示客戶品號）
                 const scatterData = [];
                 const productLabels = [];
                 activeTableData.forEach((row, idx) => {
@@ -744,11 +691,8 @@
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
-                                formatter: function(value, context) {
-                                    if (context.dataIndex === context.dataset.data.length - 1) {
-                                        return `${value.custName} (${value.y > 0 ? '+' + value.y : value.y}天)`;
-                                    }
-                                    return `${value.custName}`;
+                                formatter: function(value) {
+                                    return `${value.custName}`; // 只顯示客戶品號
                                 },
                                 color: '#000000',
                                 font: { weight: 'bold', size: 13 },
@@ -776,6 +720,7 @@
                     plugins: [ChartDataLabels]
                 });
             } else if (tabNum === 6) {
+                // 圖表 6：全產品 PO 到入庫總天數散布圖（只顯示客戶品號）
                 const scatterData = [];
                 const pointColors = [];
                 const productLabels = [];
@@ -785,7 +730,7 @@
                     productLabels.push(custPn);
                     const resolved = getResolvedDates(row.data);
                     const po = resolved["PO下單日"];
-                    const inDate = row.data["產品入庫日"]; // 檢查是否有填入庫日
+                    const inDate = row.data["產品入庫日"]; 
                     const targetDateStr = row.data["目標完成日"];
 
                     if (po && inDate && inDate.trim() !== "") {
@@ -793,7 +738,6 @@
                         if (days >= 0) {
                             scatterData.push({ x: idx + 1, y: days, custName: custPn });
 
-                            // 根據「產品入庫日」與「目標完成日」判斷顏色 (<=0天: 綠色, 1~15天: 黃色, >15天: 紅色)
                             if (targetDateStr && targetDateStr.trim() !== "") {
                                 const targetTime = new Date(targetDateStr).getTime();
                                 const actualTime = new Date(inDate).getTime();
@@ -807,13 +751,12 @@
                                     pointColors.push('#ef4444'); // 紅燈
                                 }
                             } else {
-                                pointColors.push('#3b82f6'); // 預設藍色
+                                pointColors.push('#3b82f6'); // 藍燈
                             }
                         }
                     }
                 });
 
-                // 計算有填入庫日的總件數 N (只要有填入庫日則計入，例如一個產品有填則 N=1)
                 const totalInCount = activeTableData.filter(row => {
                     const inDateVal = row.data["產品入庫日"];
                     return inDateVal && inDateVal.trim() !== "";
@@ -839,11 +782,8 @@
                             datalabels: {
                                 align: 'top',
                                 anchor: 'end',
-                                formatter: function(value, context) {
-                                    if (context.dataIndex === context.dataset.data.length - 1) {
-                                        return `${value.custName} (${value.y}天)`;
-                                    }
-                                    return `${value.custName}`;
+                                formatter: function(value) {
+                                    return `${value.custName}`; // 只顯示客戶品號
                                 },
                                 color: '#000000',
                                 font: { weight: 'bold', size: 13 },
