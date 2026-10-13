@@ -777,20 +777,42 @@
                 });
             } else if (tabNum === 6) {
                 const scatterData = [];
+                const pointColors = [];
                 const productLabels = [];
+
                 activeTableData.forEach((row, idx) => {
                     const custPn = row.data["客戶品號"] || `項次 ${idx+1}`;
                     productLabels.push(custPn);
                     const resolved = getResolvedDates(row.data);
                     const po = resolved["PO下單日"];
                     const inDate = resolved["產品入庫日"];
+                    const targetDateStr = row.data["目標完成日"];
+
                     if (po && inDate) {
                         const days = parseFloat(((new Date(inDate).getTime() - new Date(po).getTime()) / (1000 * 3600 * 24)).toFixed(1));
                         if (days >= 0) {
                             scatterData.push({ x: idx + 1, y: days, custName: custPn });
+
+                            // 根據「產品入庫日」與「目標完成日」判斷顏色
+                            if (targetDateStr && inDate) {
+                                const targetTime = new Date(targetDateStr).getTime();
+                                const actualTime = new Date(inDate).getTime();
+                                const diffDays = (actualTime - targetTime) / (1000 * 3600 * 24);
+
+                                if (diffDays <= 0) {
+                                    pointColors.push('#10b981'); // 綠色 (入庫日 <= 目標完成日)
+                                } else if (diffDays <= 15) {
+                                    pointColors.push('#f59e0b'); // 黃色 (落後 1~15 天)
+                                } else {
+                                    pointColors.push('#ef4444'); // 紅色 (落後 > 15 天)
+                                }
+                            } else {
+                                pointColors.push('#3b82f6'); // 預設藍色 (若未填目標完成日)
+                            }
                         }
                     }
                 });
+
                 const currentMonthStr = new Date().toISOString().slice(0, 7);
                 const monthInCount = activeTableData.filter(row => {
                     const resolved = getResolvedDates(row.data);
@@ -801,9 +823,9 @@
                     type: 'scatter',
                     data: {
                         datasets: [{
-                            label: 'PO 到入庫總天數',
+                            label: 'PO 到入庫總天數 (依入庫達成狀況標色)',
                             data: scatterData,
-                            backgroundColor: '#3b82f6',
+                            backgroundColor: pointColors,
                             pointRadius: 10,
                             pointHoverRadius: 12
                         }]
